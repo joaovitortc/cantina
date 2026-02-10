@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Estoque{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-8">
+  <header>
+    <h1 class="text-2xl font-bold text-gray-800">Estoque</h1>
+    <p class="text-sm text-gray-500">Controle de entrada e perda de produtos</p>
+  </header>
+
+  {% if messages %}
+  <section class="space-y-2">
+    {% for message in messages %}
+    <div class="rounded-lg px-4 py-3 border {% if message.tags == 'success' %}bg-green-50 border-green-300 text-green-800{% elif message.tags == 'error' %}bg-red-50 border-red-300 text-red-800{% else %}bg-blue-50 border-blue-300 text-blue-800{% endif %}">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="bg-white rounded-lg shadow border p-4">
+    <h2 class="text-lg font-bold text-gray-800 mb-4">Nova movimentação</h2>
+
+    <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% csrf_token %}
+
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Produto</label>
+        <select name="produto_id" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          {% for produto in produtos %}
+          <option value="{{ produto.id }}">{{ produto.nome }} (estoque atual: {{ produto.estoque }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Tipo</label>
+        <select name="tipo" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <option value="ENT">Entrada</option>
+          <option value="PER">Perda</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Quantidade</label>
+        <input type="number" name="quantidade" min="1" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Motivo (opcional)</label>
+        <input type="text" name="motivo" placeholder="Ex.: compra semanal / vencimento" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+      </div>
+
+      <div class="md:col-span-2">
+        <button class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">Registrar movimentação</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="bg-white rounded-lg shadow border overflow-hidden">
+    <div class="p-4 border-b">
+      <h2 class="text-lg font-bold text-gray-800">Histórico recente</h2>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-100 text-gray-600">
+          <tr>
+            <th class="px-4 py-3 text-left">Data</th>
+            <th class="px-4 py-3 text-left">Produto</th>
+            <th class="px-4 py-3 text-left">Tipo</th>
+            <th class="px-4 py-3 text-right">Quantidade</th>
+            <th class="px-4 py-3 text-left">Motivo</th>
+            <th class="px-4 py-3 text-left">Usuário</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for mov in movimentacoes %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-3 text-gray-600">{{ mov.criado_em|date:"d/m/Y H:i" }}</td>
+            <td class="px-4 py-3 font-medium">{{ mov.produto.nome }}</td>
+            <td class="px-4 py-3">
+              {% if mov.tipo == 'ENT' %}
+              <span class="inline-flex px-2 py-1 text-xs rounded bg-green-100 text-green-700 font-semibold">Entrada</span>
+              {% else %}
+              <span class="inline-flex px-2 py-1 text-xs rounded bg-red-100 text-red-700 font-semibold">Perda</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-right">{{ mov.quantidade }}</td>
+            <td class="px-4 py-3 text-gray-600">{{ mov.motivo|default:'—' }}</td>
+            <td class="px-4 py-3 text-gray-600">{{ mov.usuario.username|default:'—' }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="px-4 py-6 text-center text-gray-500">Nenhuma movimentação registrada</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

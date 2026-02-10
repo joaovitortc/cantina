@@ -90,7 +90,7 @@
     <!-- Categories -->
     <div class="flex gap-2 overflow-x-auto pb-2 mb-4">
       <button
-        onclick="filterCategory('all')"
+        onclick="filterCategory('all', this)"
         class="category-btn px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold whitespace-nowrap"
       >
         Todos
@@ -98,7 +98,7 @@
 
       {% for categoria in categorias %}
       <button
-        onclick="filterCategory('{{ categoria.slug }}')"
+        onclick="filterCategory('{{ categoria.slug }}', this)"
         class="category-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold whitespace-nowrap"
       >
         {{ categoria.nome }}
@@ -154,6 +154,27 @@
         <span id="subtotal" class="font-semibold text-gray-900">R$ 0,00</span>
       </div>
 
+      <div class="mb-3">
+        <label class="block text-sm font-semibold text-gray-700 mb-1" for="discountInput">
+          Desconto (%) - máximo 50%
+        </label>
+        <input
+          id="discountInput"
+          type="number"
+          min="0"
+          max="50"
+          step="0.01"
+          value="0"
+          class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          oninput="handleDiscountInput()"
+        />
+      </div>
+
+      <div class="flex justify-between mb-2 text-sm text-gray-600">
+        <span>Desconto</span>
+        <span id="discountValue" class="font-semibold text-gray-900">R$ 0,00</span>
+      </div>
+
       <div class="flex justify-between mb-4 text-lg font-bold">
         <span>Total</span>
         <span id="total" class="text-green-600">R$ 0,00</span>
@@ -168,7 +189,7 @@
         <div class="grid grid-cols-2 gap-3">
           <button
             data-payment="DIN"
-            onclick="setPayment('DIN')"
+            onclick="setPayment('DIN', this)"
             class="payment-option py-4 rounded-xl border bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-100 active:scale-[0.98]"
           >
             💵 Dinheiro
@@ -176,7 +197,7 @@
 
           <button
             data-payment="CAR"
-            onclick="setPayment('CAR')"
+            onclick="setPayment('CAR', this)"
             class="payment-option py-4 rounded-xl border bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-100 active:scale-[0.98]"
           >
             💳 Cartão
@@ -184,7 +205,7 @@
 
           <button
             data-payment="PIX"
-            onclick="setPayment('PIX')"
+            onclick="setPayment('PIX', this)"
             class="payment-option py-4 rounded-xl border bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-100 active:scale-[0.98]"
           >
             ⚡ PIX
@@ -192,7 +213,7 @@
 
           <button
             data-payment="FIA"
-            onclick="setPayment('FIA')"
+            onclick="setPayment('FIA', this)"
             class="payment-option py-4 rounded-xl bg-white text-gray-800 font-semibold shadow hover:bg-yellow-100 active:scale-[0.98]"
           >
             🧾 Fiado
@@ -259,8 +280,9 @@
   }
 
   let paymentMethod = null;
+  let discountPercent = 0;
 
-  function setPayment(method) {
+  function setPayment(method, el = null) {
     // remove active style from all
     document.querySelectorAll(".payment-option").forEach((btn) => {
       btn.classList.remove("ring-2", "ring-green-500", "border-green-500");
@@ -276,11 +298,9 @@
     }
     paymentMethod = method;
 
-    document
-      .querySelectorAll(".payment-btn")
-      .forEach((btn) => btn.classList.remove("ring-2", "ring-black"));
-
-    event.target.classList.add("ring-2", "ring-black");
+    if (el) {
+      el.classList.add("ring-2", "ring-black");
+    }
     updateFinalizeButton();
   }
 
@@ -346,6 +366,13 @@
     document.getElementById("clientInput").disabled = false;
     document.getElementById("clientInput").focus();
     updateFinalizeButton();
+  }
+
+  function resetDiscount() {
+    discountPercent = 0;
+    const input = document.getElementById("discountInput");
+    if (input) input.value = "0";
+    updateTotals();
   }
 
   function addToCart(id, name, price, category) {
@@ -495,16 +522,33 @@
     updateFinalizeButton();
   }
 
+  function handleDiscountInput() {
+    const input = document.getElementById("discountInput");
+    let value = Number(input.value || 0);
+
+    if (value < 0) value = 0;
+    if (value > 50) value = 50;
+
+    input.value = value.toFixed(2);
+    discountPercent = value;
+    updateTotals();
+  }
+
   function updateTotals() {
-    const total = cart.reduce(
+    const subtotal = cart.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0
     );
-    document.getElementById("subtotal").textContent = `R$ ${total.toFixed(2)}`;
+
+    const desconto = subtotal * (discountPercent / 100);
+    const total = subtotal - desconto;
+
+    document.getElementById("subtotal").textContent = `R$ ${subtotal.toFixed(2)}`;
+    document.getElementById("discountValue").textContent = `R$ ${desconto.toFixed(2)}`;
     document.getElementById("total").textContent = `R$ ${total.toFixed(2)}`;
   }
 
-  function filterCategory(category) {
+  function filterCategory(category, el = null) {
     const products = document.querySelectorAll(".product-card");
     const buttons = document.querySelectorAll(".category-btn");
 
@@ -513,8 +557,10 @@
       btn.classList.add("bg-gray-200", "text-gray-800");
     });
 
-    event.target.classList.add("active", "bg-blue-600", "text-white");
-    event.target.classList.remove("bg-gray-200", "text-gray-800");
+    if (el) {
+      el.classList.add("active", "bg-blue-600", "text-white");
+      el.classList.remove("bg-gray-200", "text-gray-800");
+    }
 
     products.forEach((product) => {
       if (category === "all" || product.dataset.category === category) {
@@ -530,6 +576,7 @@
 
     if (confirm("Tem certeza que deseja cancelar esta venda?")) {
       cart = [];
+      resetDiscount();
       renderCart();
       updateFinalizeButton();
     }
@@ -549,6 +596,7 @@
     const saleData = {
       cliente_id: currentClient.id,
       forma_pagamento: paymentMethod,
+      desconto_percentual: discountPercent,
       itens: cart.map((item) => ({
         id: item.id,
         quantity: item.quantity,
@@ -570,7 +618,12 @@
       if (response.ok && data.success) {
         showToast(data.message, "success");
         cart = [];
+        paymentMethod = null;
+        document.querySelectorAll(".payment-option").forEach((btn) => {
+          btn.classList.remove("ring-2", "ring-green-500", "border-green-500", "ring-black");
+        });
         clearClient();
+        resetDiscount();
         renderCart();
       } else {
         alert(
@@ -605,6 +658,8 @@
     toast.classList.remove("hidden");
     setTimeout(() => toast.classList.add("hidden"), 3000);
   }
+
+  updateTotals();
 
   document.getElementById("clientInput").addEventListener("keypress", (e) => {
     if (e.key === "Enter") identifyClient();
