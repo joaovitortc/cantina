@@ -1,0 +1,613 @@
+{% extends "base.html" %} {% load static %} {% block title %}POS{% endblock %}
+{% block extra_css %}
+<style>
+  @keyframes slideIn {
+    from {
+      transform: translateX(12px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  .item-added {
+    animation: slideIn 0.2s ease-out;
+  }
+</style>
+{% endblock %} {% block content %}
+
+<!-- PAGE HEADER -->
+<div class="mb-4">
+  <div
+    class="flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+  >
+    <h1 class="text-2xl font-bold text-gray-800">Cantina POS</h1>
+
+    <div class="flex items-center gap-4 text-sm text-gray-600">
+      <span id="datetime"></span>
+      <span>{{ user.username }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- CLIENT SEARCH -->
+<div class="bg-white rounded-xl shadow p-4 mb-6">
+  <label class="block text-sm font-semibold text-gray-700 mb-2">
+    Cliente / Cartão
+  </label>
+
+  <div class="flex flex-col sm:flex-row gap-2">
+    <input
+      id="clientInput"
+      type="text"
+      placeholder="Digite o nome ou escaneie o código"
+      class="flex-1 px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+      autofocus
+    />
+
+    <button
+      onclick="identifyClient()"
+      class="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+    >
+      Buscar
+    </button>
+  </div>
+
+  <!-- Client info -->
+  <div
+    id="clientInfo"
+    class="hidden mt-3 p-3 bg-green-50 border border-green-500 rounded-lg flex justify-between items-center"
+  >
+    <div>
+      <span class="text-sm text-green-700 font-semibold">Cliente:</span>
+      <span id="clientName" class="ml-2 font-bold text-green-900"></span>
+    </div>
+    <button onclick="clearClient()" class="text-sm text-red-600 font-semibold">
+      Alterar
+    </button>
+  </div>
+
+  <!-- Errors -->
+  <div
+    id="clientError"
+    class="hidden mt-3 p-3 bg-red-50 border border-red-500 rounded-lg text-sm text-red-700 font-semibold"
+  >
+    <span id="errorMessage"></span>
+  </div>
+
+  <!-- Results -->
+  <div
+    id="clientResults"
+    class="hidden mt-3 bg-white border rounded-lg max-h-48 overflow-y-auto"
+  ></div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_24rem] gap-6">
+  <!-- PRODUCTS -->
+  <section>
+    <!-- Categories -->
+    <div class="flex gap-2 overflow-x-auto pb-2 mb-4">
+      <button
+        onclick="filterCategory('all')"
+        class="category-btn px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold whitespace-nowrap"
+      >
+        Todos
+      </button>
+
+      {% for categoria in categorias %}
+      <button
+        onclick="filterCategory('{{ categoria.slug }}')"
+        class="category-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold whitespace-nowrap"
+      >
+        {{ categoria.nome }}
+      </button>
+      {% endfor %}
+    </div>
+
+    <!-- Products grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+      {% for produto in produtos %}
+      <button
+        onclick="handleAddToCart(this)"
+        class="product-card bg-white rounded-xl p-4 shadow hover:shadow-lg border hover:border-blue-500 text-left"
+        data-id="{{ produto.id }}"
+        data-nome="{{ produto.nome }}"
+        data-preco="{{ produto.preco }}"
+        data-category="{{ produto.categoria.slug }}"
+      >
+        <h3 class="font-bold text-gray-800">{{ produto.nome }}</h3>
+        <p class="text-green-600 font-bold">
+          R$ {{ produto.preco|floatformat:2 }}
+        </p>
+        {% if produto.descricao %}
+        <p class="text-xs text-gray-500 mt-1">{{ produto.descricao }}</p>
+        {% endif %}
+      </button>
+      {% empty %}
+      <div class="col-span-full text-center text-gray-500 py-8">
+        Nenhum produto cadastrado
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- CART -->
+  <aside
+    class="bg-white rounded-xl shadow flex flex-col sticky top-6 max-h-[calc(100vh-6rem)]"
+  >
+    <div class="p-4 bg-gray-800 text-white rounded-t-xl">
+      <h2 class="font-bold text-lg">Pedido Atual</h2>
+    </div>
+
+    <div id="cartItems" class="flex-1 overflow-y-auto p-4">
+      <div id="emptyCart" class="text-center text-gray-400 py-8">
+        🛒 Nenhum item adicionado
+      </div>
+    </div>
+
+    <div class="border-t p-4 bg-gray-50">
+      <!-- Totals -->
+      <div class="flex justify-between mb-2 text-sm text-gray-600">
+        <span>Subtotal</span>
+        <span id="subtotal" class="font-semibold text-gray-900">R$ 0,00</span>
+      </div>
+
+      <div class="flex justify-between mb-4 text-lg font-bold">
+        <span>Total</span>
+        <span id="total" class="text-green-600">R$ 0,00</span>
+      </div>
+
+      <!-- Payment method -->
+      <div class="mb-4">
+        <label class="block text-sm font-semibold mb-2 text-gray-700">
+          Forma de pagamento
+        </label>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button
+            data-payment="DIN"
+            onclick="setPayment('DIN')"
+            class="payment-option py-4 rounded-xl border bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-100 active:scale-[0.98]"
+          >
+            💵 Dinheiro
+          </button>
+
+          <button
+            data-payment="CAR"
+            onclick="setPayment('CAR')"
+            class="payment-option py-4 rounded-xl border bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-100 active:scale-[0.98]"
+          >
+            💳 Cartão
+          </button>
+
+          <button
+            data-payment="PIX"
+            onclick="setPayment('PIX')"
+            class="payment-option py-4 rounded-xl border bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-100 active:scale-[0.98]"
+          >
+            ⚡ PIX
+          </button>
+
+          <button
+            data-payment="FIA"
+            onclick="setPayment('FIA')"
+            class="payment-option py-4 rounded-xl bg-white text-gray-800 font-semibold shadow hover:bg-yellow-100 active:scale-[0.98]"
+          >
+            🧾 Fiado
+          </button>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="grid grid-cols-2 gap-3">
+        <button
+          onclick="cancelSale()"
+          class="py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold active:scale-[0.98]"
+        >
+          Cancelar
+        </button>
+
+        <button
+          id="finalizeBtn"
+          onclick="finalizeSale()"
+          disabled
+          class="py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
+        >
+          Finalizar
+        </button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- TOAST -->
+<div
+  id="toast"
+  class="hidden fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow text-white"
+>
+  <span id="toastMessage"></span>
+</div>
+
+<script>
+  let cart = [];
+  let currentClient = null;
+
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === name + "=") {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  function handleAddToCart(button) {
+    const id = Number(button.dataset.id);
+    const nome = button.dataset.nome;
+    const preco = Number(button.dataset.preco);
+    const categoria = button.dataset.categoria;
+
+    addToCart(id, nome, preco, categoria);
+  }
+
+  let paymentMethod = null;
+
+  function setPayment(method) {
+    // remove active style from all
+    document.querySelectorAll(".payment-option").forEach((btn) => {
+      btn.classList.remove("ring-2", "ring-green-500", "border-green-500");
+    });
+
+    // activate selected
+    const selected = document.querySelector(
+      `.payment-option[data-payment="${method}"]`
+    );
+
+    if (selected) {
+      selected.classList.add("ring-2", "ring-green-500", "border-green-500");
+    }
+    paymentMethod = method;
+
+    document
+      .querySelectorAll(".payment-btn")
+      .forEach((btn) => btn.classList.remove("ring-2", "ring-black"));
+
+    event.target.classList.add("ring-2", "ring-black");
+    updateFinalizeButton();
+  }
+
+  function updateDateTime() {
+    const now = new Date();
+    const formatted = now.toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    document.getElementById("datetime").textContent = formatted;
+  }
+  updateDateTime();
+  setInterval(updateDateTime, 60000);
+
+  async function identifyClient() {
+    const input = document.getElementById("clientInput");
+    const value = input.value.trim();
+
+    if (!value) {
+      showError("Por favor, identifique o cliente");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("termo", value);
+
+    try {
+      const response = await fetch('{% url "buscar_cliente" %}', {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken"),
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        showClientResults(data.clientes);
+      } else {
+        showError(data.error || "Cliente não encontrado");
+      }
+    } catch (error) {
+      showError("Erro ao buscar cliente. Tente novamente.");
+      console.error("Erro:", error);
+    }
+  }
+
+  function showError(message) {
+    document.getElementById("errorMessage").textContent = message;
+    document.getElementById("clientError").classList.remove("hidden");
+    setTimeout(() => {
+      document.getElementById("clientError").classList.add("hidden");
+    }, 3000);
+  }
+
+  function clearClient() {
+    currentClient = null;
+    document.getElementById("clientInfo").classList.add("hidden");
+    document.getElementById("clientResults").classList.add("hidden");
+    document.getElementById("clientInput").disabled = false;
+    document.getElementById("clientInput").focus();
+    updateFinalizeButton();
+  }
+
+  function addToCart(id, name, price, category) {
+    const existingItem = cart.find((item) => item.id === id);
+
+    if (existingItem) {
+      existingItem.quantity++;
+    } else {
+      cart.push({
+        id: id,
+        name: name,
+        price: price,
+        category: category,
+        quantity: 1,
+      });
+    }
+
+    renderCart();
+    showToast("Item adicionado!");
+    updateFinalizeButton();
+  }
+
+  function showClientResults(clientes) {
+    const container = document.getElementById("clientResults");
+
+    container.innerHTML = clientes
+      .map(
+        (c) => `
+        <button
+          onclick="selectClient(${c.id}, '${c.nome.replace(/'/g, "\\'")}')"
+          class="w-full text-left px-4 py-3 hover:bg-blue-50 border-b last:border-b-0">
+          <div class="font-semibold text-gray-800">${c.nome}</div>
+          ${
+            c.codigo_cartao
+              ? `<div class="text-sm text-gray-500">Cartão: ${c.codigo_cartao}</div>`
+              : ""
+          }
+        </button>
+      `
+      )
+      .join("");
+
+    container.classList.remove("hidden");
+    document.getElementById("clientError").classList.add("hidden");
+  }
+
+  function selectClient(id, nome) {
+    currentClient = { id, nome };
+
+    document.getElementById("clientName").textContent = nome;
+    document.getElementById("clientInfo").classList.remove("hidden");
+
+    document.getElementById("clientResults").classList.add("hidden");
+
+    const input = document.getElementById("clientInput");
+    input.value = "";
+    input.disabled = true;
+
+    updateFinalizeButton();
+  }
+
+  function renderCart() {
+    const container = document.getElementById("cartItems");
+
+    if (cart.length === 0) {
+      container.innerHTML = `
+      <div id="emptyCart" class="text-center text-gray-400 py-8">
+        <div class="text-5xl mb-3">🛒</div>
+        <p>Nenhum item adicionado</p>
+      </div>
+    `;
+      updateTotals();
+      return;
+    }
+
+    container.innerHTML = cart
+      .map(
+        (item) => `
+        <div class="item-added bg-gray-50 rounded-lg p-3 mb-3 border border-gray-200">
+          <div class="flex justify-between items-start mb-2">
+            <div class="flex-1">
+              <h4 class="font-bold text-gray-800">${item.name}</h4>
+              <p class="text-green-600 font-semibold">
+                R$ ${item.price.toFixed(2)}
+              </p>
+            </div>
+            <button
+              onclick="removeItem(${item.id})"
+              class="text-red-500 hover:text-red-700 font-bold text-xl">
+              ×
+            </button>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <button
+                onclick="decreaseQuantity(${item.id})"
+                class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold w-8 h-8 rounded">
+                −
+              </button>
+
+              <span class="font-bold text-lg w-8 text-center">
+                ${item.quantity}
+              </span>
+
+              <button
+                onclick="increaseQuantity(${item.id})"
+                class="bg-blue-500 hover:bg-blue-600 text-white font-bold w-8 h-8 rounded">
+                +
+              </button>
+            </div>
+
+            <span class="font-bold text-lg">
+              R$ ${(item.price * item.quantity).toFixed(2)}
+            </span>
+          </div>
+        </div>
+      `
+      )
+      .join("");
+
+    updateTotals();
+  }
+
+  function increaseQuantity(id) {
+    const item = cart.find((i) => i.id === id);
+    if (!item) return;
+    item.quantity++;
+    renderCart();
+  }
+
+  function decreaseQuantity(id) {
+    const item = cart.find((i) => i.id === id);
+    if (!item) return;
+
+    if (item.quantity === 1) {
+      removeItem(id);
+    } else {
+      item.quantity--;
+      renderCart();
+    }
+  }
+
+  function removeItem(id) {
+    cart = cart.filter((item) => item.id !== id);
+    renderCart();
+    updateFinalizeButton();
+  }
+
+  function updateTotals() {
+    const total = cart.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+    document.getElementById("subtotal").textContent = `R$ ${total.toFixed(2)}`;
+    document.getElementById("total").textContent = `R$ ${total.toFixed(2)}`;
+  }
+
+  function filterCategory(category) {
+    const products = document.querySelectorAll(".product-card");
+    const buttons = document.querySelectorAll(".category-btn");
+
+    buttons.forEach((btn) => {
+      btn.classList.remove("active", "bg-blue-600", "text-white");
+      btn.classList.add("bg-gray-200", "text-gray-800");
+    });
+
+    event.target.classList.add("active", "bg-blue-600", "text-white");
+    event.target.classList.remove("bg-gray-200", "text-gray-800");
+
+    products.forEach((product) => {
+      if (category === "all" || product.dataset.category === category) {
+        product.style.display = "block";
+      } else {
+        product.style.display = "none";
+      }
+    });
+  }
+
+  function cancelSale() {
+    if (cart.length === 0) return;
+
+    if (confirm("Tem certeza que deseja cancelar esta venda?")) {
+      cart = [];
+      renderCart();
+      updateFinalizeButton();
+    }
+  }
+
+  async function finalizeSale() {
+    if (!currentClient) {
+      alert("Por favor, identifique o cliente antes de finalizar");
+      return;
+    }
+
+    if (cart.length === 0) {
+      alert("Adicione itens ao carrinho");
+      return;
+    }
+
+    const saleData = {
+      cliente_id: currentClient.id,
+      forma_pagamento: paymentMethod,
+      itens: cart.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+        price: item.price,
+      })),
+    };
+    try {
+      const response = await fetch('{% url "finalizar_venda" %}', {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken"),
+        },
+        body: JSON.stringify(saleData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        showToast(data.message, "success");
+        cart = [];
+        clearClient();
+        renderCart();
+      } else {
+        alert(
+          "Erro ao finalizar venda: " + (data.error || "Erro desconhecido")
+        );
+      }
+    } catch (error) {
+      alert("Erro ao finalizar venda. Tente novamente.");
+      console.error("Erro:", error);
+    }
+  }
+
+  function updateFinalizeButton() {
+    const btn = document.getElementById("finalizeBtn");
+    btn.disabled = !currentClient || cart.length === 0 || !paymentMethod;
+  }
+
+  function showToast(message, type = "success") {
+    const toast = document.getElementById("toast");
+    const toastMessage = document.getElementById("toastMessage");
+
+    toastMessage.textContent = message;
+
+    if (type === "success") {
+      toast.classList.remove("bg-red-500");
+      toast.classList.add("bg-green-500");
+    } else {
+      toast.classList.remove("bg-green-500");
+      toast.classList.add("bg-red-500");
+    }
+
+    toast.classList.remove("hidden");
+    setTimeout(() => toast.classList.add("hidden"), 3000);
+  }
+
+  document.getElementById("clientInput").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") identifyClient();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}Cantina{% endblock %}</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  {% load static %}
+
+  {% block extra_css %}{% endblock %}
+</head>
+
+<body class="bg-slate-100 text-gray-900">
+
+ <!-- Mobile top bar -->
+<header class="md:hidden flex items-center gap-3 bg-gray-900 text-white px-4 h-14">
+  <button
+    id="menu-btn"
+    class="p-2 rounded hover:bg-gray-800"
+    aria-label="Open menu"
+  >
+    ☰
+  </button>
+
+  <span class="font-semibold text-lg">Cantina</span>
+</header>
+
+  <!-- Overlay -->
+  <div
+    id="overlay"
+    class="fixed inset-0 bg-black/50 z-30 hidden md:hidden"
+  ></div>
+
+  <div class="min-h-screen md:flex">
+
+    {% include "partials/sidebar.html" %}
+
+    <!-- Main content -->
+    <main class="flex-1 p-4 md:p-6 overflow-y-auto">
+      {% block content %}{% endblock %}
+    </main>
+
+  </div>
+
+  <!-- Sidebar toggle JS -->
+  <script>
+    const btn = document.getElementById('menu-btn')
+    const sidebar = document.getElementById('sidebar')
+    const overlay = document.getElementById('overlay')
+
+    btn.addEventListener('click', () => {
+      sidebar.classList.toggle('-translate-x-full')
+      overlay.classList.toggle('hidden')
+    })
+
+    overlay.addEventListener('click', () => {
+      sidebar.classList.add('-translate-x-full')
+      overlay.classList.add('hidden')
+    })
+  </script>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

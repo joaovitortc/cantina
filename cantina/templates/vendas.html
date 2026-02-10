@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Vendas{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-8">
+
+  <!-- PAGE HEADER -->
+  <header>
+    <h1 class="text-2xl font-bold text-gray-800">Vendas</h1>
+    <p class="text-sm text-gray-500">
+      Visão financeira e gestão de vendas
+    </p>
+  </header>
+
+  <!-- KPI CARDS -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+    <!-- TOTAL A RECEBER -->
+    <div class="bg-white p-4 rounded-lg shadow border">
+      <p class="text-sm text-gray-500">Total a receber (Fiado)</p>
+      <p class="text-2xl font-bold text-red-600">
+        R$ {{ total_a_receber|floatformat:2 }}
+      </p>
+    </div>
+
+    <!-- FATURAMENTO 30D -->
+    <div class="bg-white p-4 rounded-lg shadow border">
+      <p class="text-sm text-gray-500">Faturamento (30 dias)</p>
+      <p class="text-2xl font-bold text-green-600">
+        R$ {{ faturamento_30d|floatformat:2 }}
+      </p>
+    </div>
+
+    <!-- QTD VENDAS -->
+    <div class="bg-white p-4 rounded-lg shadow border">
+      <p class="text-sm text-gray-500">Vendas (30 dias)</p>
+      <p class="text-2xl font-bold">
+        {{ qtd_vendas_30d }}
+      </p>
+    </div>
+
+    <!-- TICKET MEDIO -->
+    <div class="bg-white p-4 rounded-lg shadow border">
+      <p class="text-sm text-gray-500">Ticket médio</p>
+      <p class="text-2xl font-bold">
+        R$ {{ ticket_medio_30d|floatformat:2 }}
+      </p>
+    </div>
+
+  </section>
+
+  <!-- SALES TABLE -->
+  <section class="bg-white rounded-lg shadow border overflow-hidden">
+
+    <div class="p-4 border-b">
+      <h2 class="text-lg font-bold text-gray-800">Vendas Recentes</h2>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-100 text-gray-600">
+          <tr>
+            <th class="px-4 py-3 text-left">Cliente</th>
+            <th class="px-4 py-3 text-left">Forma</th>
+            <th class="px-4 py-3 text-left">Data</th>
+            <th class="px-4 py-3 text-right">Total</th>
+            <th class="px-4 py-3 text-center">Status</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y">
+          {% for venda in vendas %}
+          <tr class="hover:bg-gray-50">
+
+            <td class="px-4 py-3 font-medium">
+              {{ venda.cliente.nome }}
+            </td>
+
+            <td class="px-4 py-3">
+              {{ venda.get_forma_pagamento_display }}
+            </td>
+
+            <td class="px-4 py-3 text-gray-600">
+              {{ venda.data_hora|date:"d/m/Y H:i" }}
+            </td>
+
+            <td class="px-4 py-3 text-right font-semibold">
+              R$ {{ venda.total|floatformat:2 }}
+            </td>
+
+            <td class="px-4 py-3 text-center">
+              {% if venda.paga %}
+                <span class="inline-flex px-2 py-1 text-xs rounded font-semibold
+                             bg-green-100 text-green-700">
+                  Paga
+                </span>
+              {% else %}
+                <span class="inline-flex px-2 py-1 text-xs rounded font-semibold
+                             bg-red-100 text-red-700">
+                  Fiado
+                </span>
+              {% endif %}
+            </td>
+
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="px-4 py-6 text-center text-gray-500">
+              Nenhuma venda encontrada
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </section>
+
+</div>
+{% endblock %}

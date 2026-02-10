@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8" />
+    <title>Login – Cantina</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f1f5f9; /* same light gray as POS */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 380px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            padding: 2rem;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .login-header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        .login-header p {
+            margin-top: 0.25rem;
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+
+        label {
+            display: block;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.65rem 0.75rem;
+            margin-top: 0.25rem;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            font-size: 0.95rem;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+        }
+
+        button {
+            margin-top: 1.5rem;
+            width: 100%;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 10px;
+            background: #2563eb; /* POS blue */
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .error {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            background: #fee2e2;
+            color: #991b1b;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <form method="post" class="login-container">
+        {% csrf_token %}
+
+        <div class="login-header">
+            <h1>Cantina</h1>
+            <p>Acesso ao sistema</p>
+        </div>
+
+        <label for="id_username">Usuário</label>
+        {{ form.username }}
+
+        <label for="id_password">Senha</label>
+        {{ form.password }}
+
+        <button type="submit">Entrar</button>
+
+        {% if form.errors %}
+            <div class="error">
+                Usuário ou senha inválidos
+            </div>
+        {% endif %}
+    </form>
+</body>
+</html>
