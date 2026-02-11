@@ -3,55 +3,52 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-8">
-
-  <!-- PAGE HEADER -->
-  <header>
-    <h1 class="text-2xl font-bold text-gray-800">Vendas</h1>
-    <p class="text-sm text-gray-500">
-      Visão financeira e gestão de vendas
-    </p>
+  <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">Vendas</h1>
+      <p class="text-sm text-gray-500">Visão financeira e gestão de vendas</p>
+    </div>
+    <a
+      href="{% url 'exportar_vendas_csv' %}"
+      class="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black"
+    >
+      Exportar CSV
+    </a>
   </header>
 
-  <!-- KPI CARDS -->
-  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  {% if messages %}
+  <section class="space-y-2">
+    {% for message in messages %}
+    <div class="rounded-lg px-4 py-3 border {% if message.tags == 'success' %}bg-green-50 border-green-300 text-green-800{% elif message.tags == 'error' %}bg-red-50 border-red-300 text-red-800{% else %}bg-blue-50 border-blue-300 text-blue-800{% endif %}">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
-    <!-- TOTAL A RECEBER -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
     <div class="bg-white p-4 rounded-lg shadow border">
       <p class="text-sm text-gray-500">Total a receber (Fiado)</p>
-      <p class="text-2xl font-bold text-red-600">
-        R$ {{ total_a_receber|floatformat:2 }}
-      </p>
+      <p class="text-2xl font-bold text-red-600">R$ {{ total_a_receber|floatformat:2 }}</p>
     </div>
 
-    <!-- FATURAMENTO 30D -->
     <div class="bg-white p-4 rounded-lg shadow border">
       <p class="text-sm text-gray-500">Faturamento (30 dias)</p>
-      <p class="text-2xl font-bold text-green-600">
-        R$ {{ faturamento_30d|floatformat:2 }}
-      </p>
+      <p class="text-2xl font-bold text-green-600">R$ {{ faturamento_30d|floatformat:2 }}</p>
     </div>
 
-    <!-- QTD VENDAS -->
     <div class="bg-white p-4 rounded-lg shadow border">
       <p class="text-sm text-gray-500">Vendas (30 dias)</p>
-      <p class="text-2xl font-bold">
-        {{ qtd_vendas_30d }}
-      </p>
+      <p class="text-2xl font-bold">{{ qtd_vendas_30d }}</p>
     </div>
 
-    <!-- TICKET MEDIO -->
     <div class="bg-white p-4 rounded-lg shadow border">
       <p class="text-sm text-gray-500">Ticket médio</p>
-      <p class="text-2xl font-bold">
-        R$ {{ ticket_medio_30d|floatformat:2 }}
-      </p>
+      <p class="text-2xl font-bold">R$ {{ ticket_medio_30d|floatformat:2 }}</p>
     </div>
-
   </section>
 
-  <!-- SALES TABLE -->
   <section class="bg-white rounded-lg shadow border overflow-hidden">
-
     <div class="p-4 border-b">
       <h2 class="text-lg font-bold text-gray-800">Vendas Recentes</h2>
     </div>
@@ -63,58 +60,53 @@
             <th class="px-4 py-3 text-left">Cliente</th>
             <th class="px-4 py-3 text-left">Forma</th>
             <th class="px-4 py-3 text-left">Data</th>
+            <th class="px-4 py-3 text-right">Subtotal</th>
+            <th class="px-4 py-3 text-right">Desconto</th>
             <th class="px-4 py-3 text-right">Total</th>
             <th class="px-4 py-3 text-center">Status</th>
+            <th class="px-4 py-3 text-center">Ação</th>
           </tr>
         </thead>
 
         <tbody class="divide-y">
           {% for venda in vendas %}
           <tr class="hover:bg-gray-50">
-
-            <td class="px-4 py-3 font-medium">
-              {{ venda.cliente.nome }}
-            </td>
-
-            <td class="px-4 py-3">
-              {{ venda.get_forma_pagamento_display }}
-            </td>
-
-            <td class="px-4 py-3 text-gray-600">
-              {{ venda.data_hora|date:"d/m/Y H:i" }}
-            </td>
-
-            <td class="px-4 py-3 text-right font-semibold">
-              R$ {{ venda.total|floatformat:2 }}
-            </td>
+            <td class="px-4 py-3 font-medium">{{ venda.cliente.nome|default:"Consumidor final" }}</td>
+            <td class="px-4 py-3">{{ venda.get_forma_pagamento_display }}</td>
+            <td class="px-4 py-3 text-gray-600">{{ venda.data_hora|date:"d/m/Y H:i" }}</td>
+            <td class="px-4 py-3 text-right">R$ {{ venda.subtotal|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right text-red-600">- R$ {{ venda.desconto_valor|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right font-semibold">R$ {{ venda.total|floatformat:2 }}</td>
 
             <td class="px-4 py-3 text-center">
               {% if venda.paga %}
-                <span class="inline-flex px-2 py-1 text-xs rounded font-semibold
-                             bg-green-100 text-green-700">
-                  Paga
-                </span>
+              <span class="inline-flex px-2 py-1 text-xs rounded font-semibold bg-green-100 text-green-700">Paga</span>
               {% else %}
-                <span class="inline-flex px-2 py-1 text-xs rounded font-semibold
-                             bg-red-100 text-red-700">
-                  Fiado
-                </span>
+              <span class="inline-flex px-2 py-1 text-xs rounded font-semibold bg-red-100 text-red-700">Fiado</span>
               {% endif %}
             </td>
 
+            <td class="px-4 py-3 text-center">
+              {% if not venda.paga %}
+              <form method="post" action="{% url 'quitar_venda' venda.id %}">
+                {% csrf_token %}
+                <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
+                  Marcar como paga
+                </button>
+              </form>
+              {% else %}
+              <span class="text-xs text-gray-400">—</span>
+              {% endif %}
+            </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="5" class="px-4 py-6 text-center text-gray-500">
-              Nenhuma venda encontrada
-            </td>
+            <td colspan="8" class="px-4 py-6 text-center text-gray-500">Nenhuma venda encontrada</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-
   </section>
-
 </div>
 {% endblock %}

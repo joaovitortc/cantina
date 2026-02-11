@@ -90,7 +90,7 @@
     <!-- Categories -->
     <div class="flex gap-2 overflow-x-auto pb-2 mb-4">
       <button
-        onclick="filterCategory('all')"
+        onclick="filterCategory('all', this)"
         class="category-btn px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold whitespace-nowrap"
       >
         Todos
@@ -98,7 +98,7 @@
 
       {% for categoria in categorias %}
       <button
-        onclick="filterCategory('{{ categoria.slug }}')"
+        onclick="filterCategory('{{ categoria.slug }}', this)"
         class="category-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold whitespace-nowrap"
       >
         {{ categoria.nome }}
@@ -154,6 +154,22 @@
         <span id="subtotal" class="font-semibold text-gray-900">R$ 0,00</span>
       </div>
 
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onclick="promptDiscount()"
+          class="px-3 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300"
+        >
+          Desconto
+        </button>
+        <span class="text-sm text-gray-700">Aplicado: <strong id="discountPercent">0%</strong></span>
+      </div>
+
+      <div class="flex justify-between mb-2 text-sm text-gray-600">
+        <span>Desconto</span>
+        <span id="discountValue" class="font-semibold text-gray-900">R$ 0,00</span>
+      </div>
+
       <div class="flex justify-between mb-4 text-lg font-bold">
         <span>Total</span>
         <span id="total" class="text-green-600">R$ 0,00</span>
@@ -168,7 +184,7 @@
         <div class="grid grid-cols-2 gap-3">
           <button
             data-payment="DIN"
-            onclick="setPayment('DIN')"
+            onclick="setPayment('DIN', this)"
             class="payment-option py-4 rounded-xl border bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-100 active:scale-[0.98]"
           >
             💵 Dinheiro
@@ -176,7 +192,7 @@
 
           <button
             data-payment="CAR"
-            onclick="setPayment('CAR')"
+            onclick="setPayment('CAR', this)"
             class="payment-option py-4 rounded-xl border bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-100 active:scale-[0.98]"
           >
             💳 Cartão
@@ -184,7 +200,7 @@
 
           <button
             data-payment="PIX"
-            onclick="setPayment('PIX')"
+            onclick="setPayment('PIX', this)"
             class="payment-option py-4 rounded-xl border bg-white text-gray-800 font-semibold shadow-sm hover:bg-gray-100 active:scale-[0.98]"
           >
             ⚡ PIX
@@ -192,7 +208,7 @@
 
           <button
             data-payment="FIA"
-            onclick="setPayment('FIA')"
+            onclick="setPayment('FIA', this)"
             class="payment-option py-4 rounded-xl bg-white text-gray-800 font-semibold shadow hover:bg-yellow-100 active:scale-[0.98]"
           >
             🧾 Fiado
@@ -259,8 +275,9 @@
   }
 
   let paymentMethod = null;
+  let discountPercent = 0;
 
-  function setPayment(method) {
+  function setPayment(method, el = null) {
     // remove active style from all
     document.querySelectorAll(".payment-option").forEach((btn) => {
       btn.classList.remove("ring-2", "ring-green-500", "border-green-500");
@@ -276,11 +293,9 @@
     }
     paymentMethod = method;
 
-    document
-      .querySelectorAll(".payment-btn")
-      .forEach((btn) => btn.classList.remove("ring-2", "ring-black"));
-
-    event.target.classList.add("ring-2", "ring-black");
+    if (el) {
+      el.classList.add("ring-2", "ring-black");
+    }
     updateFinalizeButton();
   }
 
@@ -346,6 +361,12 @@
     document.getElementById("clientInput").disabled = false;
     document.getElementById("clientInput").focus();
     updateFinalizeButton();
+  }
+
+  function resetDiscount() {
+    discountPercent = 0;
+    document.getElementById("discountPercent").textContent = "0%";
+    updateTotals();
   }
 
   function addToCart(id, name, price, category) {
@@ -495,16 +516,41 @@
     updateFinalizeButton();
   }
 
+  function promptDiscount() {
+    const value = prompt("Digite o desconto inteiro (0 a 50):", String(Math.round(discountPercent)));
+
+    if (value === null) return;
+    if (!/^\d+$/.test(value.trim())) {
+      alert("Informe um número inteiro entre 0 e 50.");
+      return;
+    }
+
+    const parsed = Number(value);
+    if (parsed < 0 || parsed > 50) {
+      alert("Desconto deve estar entre 0 e 50.");
+      return;
+    }
+
+    discountPercent = parsed;
+    document.getElementById("discountPercent").textContent = `${parsed}%`;
+    updateTotals();
+  }
+
   function updateTotals() {
-    const total = cart.reduce(
+    const subtotal = cart.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0
     );
-    document.getElementById("subtotal").textContent = `R$ ${total.toFixed(2)}`;
+
+    const desconto = subtotal * (discountPercent / 100);
+    const total = subtotal - desconto;
+
+    document.getElementById("subtotal").textContent = `R$ ${subtotal.toFixed(2)}`;
+    document.getElementById("discountValue").textContent = `R$ ${desconto.toFixed(2)}`;
     document.getElementById("total").textContent = `R$ ${total.toFixed(2)}`;
   }
 
-  function filterCategory(category) {
+  function filterCategory(category, el = null) {
     const products = document.querySelectorAll(".product-card");
     const buttons = document.querySelectorAll(".category-btn");
 
@@ -513,8 +559,10 @@
       btn.classList.add("bg-gray-200", "text-gray-800");
     });
 
-    event.target.classList.add("active", "bg-blue-600", "text-white");
-    event.target.classList.remove("bg-gray-200", "text-gray-800");
+    if (el) {
+      el.classList.add("active", "bg-blue-600", "text-white");
+      el.classList.remove("bg-gray-200", "text-gray-800");
+    }
 
     products.forEach((product) => {
       if (category === "all" || product.dataset.category === category) {
@@ -530,25 +578,27 @@
 
     if (confirm("Tem certeza que deseja cancelar esta venda?")) {
       cart = [];
+      resetDiscount();
       renderCart();
       updateFinalizeButton();
     }
   }
 
   async function finalizeSale() {
-    if (!currentClient) {
-      alert("Por favor, identifique o cliente antes de finalizar");
-      return;
-    }
-
     if (cart.length === 0) {
       alert("Adicione itens ao carrinho");
       return;
     }
 
+    if (paymentMethod === "FIA" && !currentClient) {
+      alert("Fiado só é permitido para cliente identificado.");
+      return;
+    }
+
     const saleData = {
-      cliente_id: currentClient.id,
+      cliente_id: currentClient ? currentClient.id : null,
       forma_pagamento: paymentMethod,
+      desconto_percentual: discountPercent,
       itens: cart.map((item) => ({
         id: item.id,
         quantity: item.quantity,
@@ -570,7 +620,12 @@
       if (response.ok && data.success) {
         showToast(data.message, "success");
         cart = [];
+        paymentMethod = null;
+        document.querySelectorAll(".payment-option").forEach((btn) => {
+          btn.classList.remove("ring-2", "ring-green-500", "border-green-500", "ring-black");
+        });
         clearClient();
+        resetDiscount();
         renderCart();
       } else {
         alert(
@@ -585,7 +640,7 @@
 
   function updateFinalizeButton() {
     const btn = document.getElementById("finalizeBtn");
-    btn.disabled = !currentClient || cart.length === 0 || !paymentMethod;
+    btn.disabled = cart.length === 0 || !paymentMethod;
   }
 
   function showToast(message, type = "success") {
@@ -605,6 +660,8 @@
     toast.classList.remove("hidden");
     setTimeout(() => toast.classList.add("hidden"), 3000);
   }
+
+  updateTotals();
 
   document.getElementById("clientInput").addEventListener("keypress", (e) => {
     if (e.key === "Enter") identifyClient();
