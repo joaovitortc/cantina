@@ -108,7 +108,7 @@ def finalizar_venda(request):
     itens = data.get('itens', [])
     forma = data.get('forma_pagamento')
 
-    if not cliente_id or not itens:
+    if not itens:
         return JsonResponse({'success': False, 'error': 'Dados incompletos'}, status=400)
 
     if forma not in FORMAS_PAGAMENTO_VALIDAS:
@@ -122,7 +122,12 @@ def finalizar_venda(request):
     if desconto_percentual < 0 or desconto_percentual > MAX_DESCONTO_PERCENTUAL:
         return JsonResponse({'success': False, 'error': 'Desconto deve estar entre 0% e 50%'}, status=400)
 
-    cliente = get_object_or_404(Cliente, id=cliente_id, ativo=True)
+    cliente = None
+    if cliente_id:
+        cliente = get_object_or_404(Cliente, id=cliente_id, ativo=True)
+
+    if forma == 'FIA' and not cliente:
+        return JsonResponse({'success': False, 'error': 'Fiado só é permitido para cliente identificado'}, status=400)
 
     try:
         with transaction.atomic():
@@ -265,7 +270,6 @@ def vendas_dashboard(request):
 
     faturamento_30d = (
         vendas_30d
-        .filter(paga=True)
         .aggregate(total=Sum('total'))
         ['total'] or 0
     )
@@ -331,9 +335,9 @@ def exportar_vendas_csv(request):
         writer.writerow([
             venda.id,
             venda.data_hora.strftime('%d/%m/%Y %H:%M'),
-            venda.cliente.nome,
+            venda.cliente.nome if venda.cliente else 'Consumidor final',
             venda.operador.username if venda.operador else '-',
-            venda.get_forma_pagamento_display(),
+            venda.get_forma_pagamento_display().replace('Cartão', 'Cartao'),
             venda.subtotal,
             venda.desconto_percentual,
             venda.desconto_valor,

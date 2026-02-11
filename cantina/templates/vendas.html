@@ -71,7 +71,7 @@
         <tbody class="divide-y">
           {% for venda in vendas %}
           <tr class="hover:bg-gray-50">
-            <td class="px-4 py-3 font-medium">{{ venda.cliente.nome }}</td>
+            <td class="px-4 py-3 font-medium">{{ venda.cliente.nome|default:"Consumidor final" }}</td>
             <td class="px-4 py-3">{{ venda.get_forma_pagamento_display }}</td>
             <td class="px-4 py-3 text-gray-600">{{ venda.data_hora|date:"d/m/Y H:i" }}</td>
             <td class="px-4 py-3 text-right">R$ {{ venda.subtotal|floatformat:2 }}</td>

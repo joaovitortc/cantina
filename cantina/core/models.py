@@ -79,7 +79,7 @@ class Venda(models.Model):
         ('FIA', 'Fiado'),
     ]
 
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='vendas')
+    cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True, related_name='vendas')
     operador = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     data_hora = models.DateTimeField(auto_now_add=True)
 
@@ -98,7 +98,8 @@ class Venda(models.Model):
     observacao = models.TextField(blank=True)
 
     def __str__(self):
-        return f"Venda #{self.id} - {self.cliente.nome}"
+        cliente_nome = self.cliente.nome if self.cliente else "Consumidor final"
+        return f"Venda #{self.id} - {cliente_nome}"
 
 
 class ItemVenda(models.Model):

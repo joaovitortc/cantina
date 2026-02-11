@@ -89,3 +89,63 @@ class POSFlowTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+
+    def test_finalizar_venda_sem_cliente_permitida_para_pagamento_nao_fiado(self):
+        payload = {
+            'cliente_id': None,
+            'forma_pagamento': 'DIN',
+            'desconto_percentual': 0,
+            'itens': [
+                {'id': self.produto.id, 'quantity': 1},
+            ],
+        }
+
+        response = self.client.post(
+            reverse('finalizar_venda'),
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        venda = Venda.objects.latest('id')
+        self.assertIsNone(venda.cliente)
+
+    def test_finalizar_venda_sem_cliente_rejeita_fiado(self):
+        payload = {
+            'cliente_id': None,
+            'forma_pagamento': 'FIA',
+            'desconto_percentual': 0,
+            'itens': [
+                {'id': self.produto.id, 'quantity': 1},
+            ],
+        }
+
+        response = self.client.post(
+            reverse('finalizar_venda'),
+            data=json.dumps(payload),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_exportar_vendas_csv_normaliza_cartao_sem_til(self):
+        Venda.objects.create(
+            cliente=self.cliente,
+            operador=self.user,
+            subtotal=Decimal('10.00'),
+            desconto_percentual=Decimal('0.00'),
+            desconto_valor=Decimal('0.00'),
+            total=Decimal('10.00'),
+            forma_pagamento='CAR',
+            paga=True,
+        )
+
+        # endpoint é restrito para superuser
+        self.user.is_superuser = True
+        self.user.save(update_fields=['is_superuser'])
+
+        response = self.client.get(reverse('exportar_vendas_csv'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Cartao', response.content.decode('utf-8'))
+        self.assertNotIn('Cartão', response.content.decode('utf-8'))
