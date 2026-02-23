@@ -1,0 +1,12 @@
+{% extends "admin/base.html" %}
+
+{% block branding %}
+<div id="site-name" style="display:flex; align-items:center; gap:1.5rem;">
+  <a href="{% url 'pos' %}" style="color:#9ca3af; font-size:0.875rem; text-decoration:none; white-space:nowrap;">
+    ← Voltar ao app
+  </a>
+  <a href="{% url 'admin:index' %}" class="admin_title" style="color:white;">
+    {{ site_header|default:_('Django administration') }}
+  </a>
+</div>
+{% endblock %}
