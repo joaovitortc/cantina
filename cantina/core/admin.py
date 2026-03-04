@@ -13,9 +13,27 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Produto)
 class ProdutoAdmin(admin.ModelAdmin):
-    list_display = ("nome", "categoria", "preco", "custo", "estoque", "ativo")
+    list_display = ("nome", "categoria", "preco", "custo", "estoque", "fator_estoque", "produto_estoque", "ativo")
     list_editable = ("preco", "custo", "estoque", "ativo")
     search_fields = ("nome",)
+    fieldsets = (
+        (None, {
+            'fields': ('nome', 'categoria', 'descricao', 'preco', 'custo', 'ativo'),
+        }),
+        ('Estoque', {
+            'fields': ('estoque',),
+        }),
+        ('Vínculo de estoque (ex: fatias de pizza)', {
+            'fields': ('produto_estoque', 'fator_estoque'),
+            'description': (
+                'Use quando este produto consome o estoque de outro produto. '
+                'Ex: "Pizza Fatia" → Produto de estoque: Pizza, Fator: 1. '
+                'Para produtos que consomem múltiplas unidades do próprio estoque '
+                '(ex: Pizza Inteira = 6 fatias), deixe Produto de estoque em branco '
+                'e defina o Fator aqui.'
+            ),
+        }),
+    )
 
 
 @admin.register(Cliente)

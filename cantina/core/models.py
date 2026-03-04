@@ -46,6 +46,30 @@ class Produto(models.Model):
 
     descricao = models.TextField(blank=True)
 
+    # Stock-linking fields.
+    # Leave both blank for normal products (behaviour unchanged).
+    # Set produto_estoque to point at the product whose stock is consumed
+    # and fator_estoque to how many units of that stock one sale unit uses.
+    # Example: "Pizza Fatia" → produto_estoque=Pizza, fator_estoque=1
+    #          "Pizza Inteira" → produto_estoque=null, fator_estoque=6
+    #            (stock tracked in slices directly on Pizza's estoque)
+    produto_estoque = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dependentes',
+        help_text='Produto cujo estoque será consumido ao vender este item. '
+                  'Deixe em branco para usar o próprio estoque.',
+        verbose_name='Produto de estoque',
+    )
+    fator_estoque = models.PositiveSmallIntegerField(
+        default=1,
+        help_text='Unidades do estoque consumidas por item vendido. '
+                  'Ex: fatia de pizza = 1, pizza inteira = 6.',
+        verbose_name='Fator de estoque',
+    )
+
     class Meta:
         verbose_name = "Produto"
         verbose_name_plural = "Produtos"

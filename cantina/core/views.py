@@ -151,7 +151,14 @@ def finalizar_venda(request):
 
                 produto = get_object_or_404(Produto.objects.select_for_update(), id=produto_id, ativo=True)
 
-                if produto.estoque > 0 and quantidade > produto.estoque:
+                # Determine which product's stock is consumed and by how much.
+                consumo = quantidade * produto.fator_estoque
+                if produto.produto_estoque_id:
+                    stock_prod = Produto.objects.select_for_update().get(id=produto.produto_estoque_id)
+                else:
+                    stock_prod = produto
+
+                if stock_prod.estoque > 0 and consumo > stock_prod.estoque:
                     return JsonResponse(
                         {'success': False, 'error': f'Estoque insuficiente para {produto.nome}'},
                         status=400
@@ -163,6 +170,8 @@ def finalizar_venda(request):
 
                 itens_validados.append({
                     'produto': produto,
+                    'stock_prod': stock_prod,
+                    'consumo': consumo,
                     'quantidade': quantidade,
                     'preco_unitario': preco,
                     'subtotal': subtotal_item,
@@ -184,11 +193,12 @@ def finalizar_venda(request):
             )
 
             for item in itens_validados:
-                produto = item['produto']
+                produto    = item['produto']
+                stock_prod = item['stock_prod']
 
-                if produto.estoque > 0:
-                    produto.estoque -= item['quantidade']
-                    produto.save(update_fields=['estoque'])
+                if stock_prod.estoque > 0:
+                    stock_prod.estoque -= item['consumo']
+                    stock_prod.save(update_fields=['estoque'])
 
                 ItemVenda.objects.create(
                     venda=venda,
