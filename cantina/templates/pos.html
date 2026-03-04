@@ -84,14 +84,14 @@
 </div>
 
 <!-- MAIN GRID -->
-<div class="grid grid-cols-1 lg:grid-cols-[1fr_24rem] gap-6">
+<div class="grid grid-cols-1 md:grid-cols-[1fr_22rem] lg:grid-cols-[1fr_24rem] gap-6">
   <!-- PRODUCTS -->
   <section>
     <!-- Categories -->
     <div class="flex gap-2 overflow-x-auto pb-2 mb-4">
       <button
         onclick="filterCategory('all', this)"
-        class="category-btn px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold whitespace-nowrap"
+        class="category-btn px-4 py-2.5 rounded-lg bg-blue-600 text-white font-semibold whitespace-nowrap"
       >
         Todos
       </button>
@@ -99,7 +99,7 @@
       {% for categoria in categorias %}
       <button
         onclick="filterCategory('{{ categoria.slug }}', this)"
-        class="category-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold whitespace-nowrap"
+        class="category-btn px-4 py-2.5 rounded-lg bg-gray-200 text-gray-800 font-semibold whitespace-nowrap"
       >
         {{ categoria.nome }}
       </button>
@@ -107,18 +107,18 @@
     </div>
 
     <!-- Products grid -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
       {% for produto in produtos %}
       <button
         onclick="handleAddToCart(this)"
-        class="product-card bg-white rounded-xl p-4 shadow hover:shadow-lg border hover:border-blue-500 text-left"
+        class="product-card bg-white rounded-xl p-4 md:p-5 shadow hover:shadow-lg border hover:border-blue-500 text-left active:scale-[0.97] transition-transform"
         data-id="{{ produto.id }}"
         data-nome="{{ produto.nome }}"
         data-preco="{{ produto.preco }}"
         data-category="{{ produto.categoria.slug }}"
       >
-        <h3 class="font-bold text-gray-800">{{ produto.nome }}</h3>
-        <p class="text-green-600 font-bold">
+        <h3 class="font-bold text-gray-800 text-sm md:text-base">{{ produto.nome }}</h3>
+        <p class="text-green-600 font-bold text-sm md:text-base">
           R$ {{ produto.preco|floatformat:2 }}
         </p>
         {% if produto.descricao %}
@@ -135,7 +135,7 @@
 
   <!-- CART -->
   <aside
-    class="bg-white rounded-xl shadow flex flex-col sticky top-6 max-h-[calc(100vh-6rem)]"
+    class="bg-white rounded-xl shadow flex flex-col sticky top-[4.5rem] max-h-[calc(100vh-5.5rem)]"
   >
     <div class="p-4 bg-gray-800 text-white rounded-t-xl">
       <h2 class="font-bold text-lg">Pedido Atual</h2>

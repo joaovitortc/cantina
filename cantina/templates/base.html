@@ -14,11 +14,11 @@
 
 <body class="bg-slate-100 text-gray-900">
 
- <!-- Mobile top bar -->
-<header class="md:hidden flex items-center gap-3 bg-gray-900 text-white px-4 h-14">
+ <!-- Top bar — always visible -->
+<header class="sticky top-0 z-50 flex items-center gap-3 bg-gray-900 text-white px-4 h-14">
   <button
     id="menu-btn"
-    class="p-2 rounded hover:bg-gray-800"
+    class="p-2 rounded hover:bg-gray-800 active:bg-gray-700"
     aria-label="Open menu"
   >
     ☰
@@ -28,17 +28,14 @@
 </header>
 
   <!-- Overlay -->
-  <div
-    id="overlay"
-    class="fixed inset-0 bg-black/50 z-30 hidden md:hidden"
-  ></div>
+  <div id="overlay" class="fixed inset-0 bg-black/50 z-30 hidden"></div>
 
-  <div class="min-h-screen md:flex">
+  <div class="min-h-screen">
 
     {% include "partials/sidebar.html" %}
 
     <!-- Main content -->
-    <main class="flex-1 p-4 md:p-6 overflow-y-auto">
+    <main class="p-4">
       {% block content %}{% endblock %}
     </main>
 
