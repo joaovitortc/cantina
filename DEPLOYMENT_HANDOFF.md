@@ -18,7 +18,7 @@
 
 **SSH command:**
 ```bash
-ssh ubuntu@40.233.127.51
+ssh -i ~/.ssh/cantina.key ubuntu@40.233.127.51
 ```
 
 ---
@@ -74,7 +74,7 @@ powershell -File C:\Users\joaov\cantina-backups\pull-backup.ps1
 ## Redeploying After Code Changes
 
 ```bash
-ssh ubuntu@40.233.127.51
+ssh -i ~/.ssh/cantina.key ubuntu@40.233.127.51
 cd /opt/cantina/cantina
 git pull
 docker compose up -d --build
