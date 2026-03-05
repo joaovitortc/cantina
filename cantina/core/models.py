@@ -154,6 +154,14 @@ class MovimentacaoEstoque(models.Model):
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name='movimentacoes_estoque')
     tipo = models.CharField(max_length=3, choices=TIPO_CHOICES)
     quantidade = models.PositiveIntegerField()
+    custo_unitario = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Custo unitário',
+        help_text='Custo por unidade pago nesta entrada (usado para calcular custo médio)',
+    )
     motivo = models.CharField(max_length=255, blank=True)
     usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     criado_em = models.DateTimeField(auto_now_add=True)

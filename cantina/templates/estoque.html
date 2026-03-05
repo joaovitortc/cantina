@@ -28,14 +28,14 @@
         <label class="block text-sm text-gray-600 mb-1">Produto</label>
         <select name="produto_id" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
           {% for produto in produtos %}
-          <option value="{{ produto.id }}">{{ produto.nome }} (estoque atual: {{ produto.estoque }})</option>
+          <option value="{{ produto.id }}">{{ produto.nome }} (estoque: {{ produto.estoque }} | custo médio: R$ {{ produto.custo|floatformat:2 }})</option>
           {% endfor %}
         </select>
       </div>
 
       <div>
         <label class="block text-sm text-gray-600 mb-1">Tipo</label>
-        <select name="tipo" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <select name="tipo" id="tipoSelect" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="toggleCustoField()">
           <option value="ENT">Entrada</option>
           <option value="PER">Perda</option>
         </select>
@@ -46,7 +46,12 @@
         <input type="number" name="quantidade" min="1" required class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
       </div>
 
-      <div>
+      <div id="custoField">
+        <label class="block text-sm text-gray-600 mb-1">Custo unitário (R$) <span class="text-gray-400">— opcional, atualiza custo médio</span></label>
+        <input type="number" name="custo_unitario" min="0" step="0.01" placeholder="0,00" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+      </div>
+
+      <div class="md:col-span-2">
         <label class="block text-sm text-gray-600 mb-1">Motivo (opcional)</label>
         <input type="text" name="motivo" placeholder="Ex.: compra semanal / vencimento" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
       </div>
@@ -55,6 +60,14 @@
         <button class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700">Registrar movimentação</button>
       </div>
     </form>
+
+    <script>
+      function toggleCustoField() {
+        const tipo = document.getElementById('tipoSelect').value;
+        document.getElementById('custoField').style.display = tipo === 'ENT' ? '' : 'none';
+      }
+      toggleCustoField();
+    </script>
   </section>
 
   <section class="bg-white rounded-lg shadow border overflow-hidden">
@@ -70,6 +83,7 @@
             <th class="px-4 py-3 text-left">Produto</th>
             <th class="px-4 py-3 text-left">Tipo</th>
             <th class="px-4 py-3 text-right">Quantidade</th>
+            <th class="px-4 py-3 text-right">Custo unit.</th>
             <th class="px-4 py-3 text-left">Motivo</th>
             <th class="px-4 py-3 text-left">Usuário</th>
           </tr>
@@ -87,12 +101,15 @@
               {% endif %}
             </td>
             <td class="px-4 py-3 text-right">{{ mov.quantidade }}</td>
+            <td class="px-4 py-3 text-right text-gray-600">
+              {% if mov.custo_unitario %}R$ {{ mov.custo_unitario|floatformat:2 }}{% else %}—{% endif %}
+            </td>
             <td class="px-4 py-3 text-gray-600">{{ mov.motivo|default:'—' }}</td>
             <td class="px-4 py-3 text-gray-600">{{ mov.usuario.username|default:'—' }}</td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="6" class="px-4 py-6 text-center text-gray-500">Nenhuma movimentação registrada</td>
+            <td colspan="7" class="px-4 py-6 text-center text-gray-500">Nenhuma movimentação registrada</td>
           </tr>
           {% endfor %}
         </tbody>

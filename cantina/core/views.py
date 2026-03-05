@@ -380,6 +380,18 @@ def estoque_view(request):
             messages.error(request, 'A quantidade deve ser maior que zero.')
             return redirect('estoque')
 
+        custo_unitario = None
+        if tipo == 'ENT':
+            raw_custo = request.POST.get('custo_unitario', '').strip()
+            if raw_custo:
+                try:
+                    custo_unitario = Decimal(raw_custo.replace(',', '.'))
+                    if custo_unitario < 0:
+                        raise ValueError
+                except (InvalidOperation, ValueError):
+                    messages.error(request, 'Custo unitário inválido.')
+                    return redirect('estoque')
+
         produto = get_object_or_404(Produto, id=produto_id)
 
         with transaction.atomic():
@@ -389,17 +401,30 @@ def estoque_view(request):
                 messages.error(request, f'Estoque insuficiente para perda de {produto.nome}.')
                 return redirect('estoque')
 
+            update_fields = ['estoque']
+
             if tipo == 'ENT':
+                if custo_unitario is not None:
+                    estoque_atual = Decimal(produto.estoque)
+                    custo_atual = Decimal(produto.custo) if produto.custo else Decimal('0')
+                    novo_total = estoque_atual + Decimal(quantidade)
+                    if novo_total > 0:
+                        produto.custo = (
+                            (estoque_atual * custo_atual + Decimal(quantidade) * custo_unitario)
+                            / novo_total
+                        ).quantize(Decimal('0.01'))
+                        update_fields.append('custo')
                 produto.estoque += quantidade
             else:
                 produto.estoque -= quantidade
 
-            produto.save(update_fields=['estoque'])
+            produto.save(update_fields=update_fields)
 
             MovimentacaoEstoque.objects.create(
                 produto=produto,
                 tipo=tipo,
                 quantidade=quantidade,
+                custo_unitario=custo_unitario,
                 motivo=motivo,
                 usuario=request.user,
             )
