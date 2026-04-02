@@ -9,7 +9,9 @@ urlpatterns = [
     path('produtos/', views.produtos_list, name='produtos_list'),
     path('vendas/', views.vendas_dashboard, name='vendas'),
     path('vendas/export.csv', views.exportar_vendas_csv, name='exportar_vendas_csv'),
+    path('vendas/export-clientes.csv', views.exportar_vendas_clientes_csv, name='exportar_vendas_clientes_csv'),
     path('vendas/<int:venda_id>/quitar/', views.quitar_venda, name='quitar_venda'),
+    path('clientes/<int:cliente_id>/quitar-fiados/', views.quitar_cliente_fiados, name='quitar_cliente_fiados'),
     path('estoque/', views.estoque_view, name='estoque'),
 
     path('api/buscar-cliente/', views.buscar_cliente, name='buscar_cliente'),

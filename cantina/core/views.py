@@ -298,6 +298,29 @@ def vendas_dashboard(request):
         .order_by('-data_hora')[:30]
     )
 
+    vendas_por_cliente_raw = (
+        Venda.objects
+        .values('cliente_id', 'cliente__nome')
+        .annotate(
+            total_geral=Sum('total'),
+            total_fiado=Sum('total', filter=Q(paga=False)),
+            qtd=Count('id'),
+            qtd_fiado=Count('id', filter=Q(paga=False)),
+        )
+        .order_by('-total_geral')
+    )
+
+    vendas_por_cliente = []
+    for row in vendas_por_cliente_raw:
+        vendas_por_cliente.append({
+            'cliente_id': row['cliente_id'],
+            'cliente_nome': row['cliente__nome'] or 'Consumidor final',
+            'total_geral': row['total_geral'] or Decimal('0'),
+            'total_fiado': row['total_fiado'] or Decimal('0'),
+            'qtd': row['qtd'] or 0,
+            'qtd_fiado': row['qtd_fiado'] or 0,
+        })
+
     return render(
         request,
         'vendas.html',
@@ -307,6 +330,7 @@ def vendas_dashboard(request):
             'qtd_vendas_30d': qtd_vendas_30d,
             'ticket_medio_30d': ticket_medio_30d,
             'vendas': vendas,
+            'vendas_por_cliente': vendas_por_cliente,
         }
     )
 
@@ -356,6 +380,58 @@ def exportar_vendas_csv(request):
         ])
 
     return response
+
+
+@login_required
+@admin_required
+def exportar_vendas_clientes_csv(request):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="vendas_por_cliente.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'Cliente', 'Saldo Devedor', 'Qtd Vendas', 'Qtd Fiado'
+    ])
+
+    vendas_por_cliente = (
+        Venda.objects
+        .values('cliente__nome')
+        .annotate(
+            total_geral=Sum('total'),
+            total_fiado=Sum('total', filter=Q(paga=False)),
+            qtd=Count('id'),
+            qtd_fiado=Count('id', filter=Q(paga=False)),
+        )
+        .order_by('-total_geral')
+    )
+
+    for row in vendas_por_cliente:
+        writer.writerow([
+            row['cliente__nome'] or 'Consumidor final',
+            row['total_fiado'] or Decimal('0'),
+            row['qtd'] or 0,
+            row['qtd_fiado'] or 0,
+        ])
+
+    return response
+
+
+@login_required
+@admin_required
+@require_POST
+def quitar_cliente_fiados(request, cliente_id):
+    cliente = get_object_or_404(Cliente, id=cliente_id, ativo=True)
+
+    pendentes = Venda.objects.filter(cliente=cliente, paga=False)
+    qtd = pendentes.count()
+
+    if qtd == 0:
+        messages.info(request, f'Nenhuma venda fiada pendente para {cliente.nome}.')
+        return redirect('vendas')
+
+    pendentes.update(paga=True, quitada_em=timezone.now())
+    messages.success(request, f'{qtd} venda(s) de {cliente.nome} foram quitadas.')
+    return redirect('vendas')
 
 
 @login_required

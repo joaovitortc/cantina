@@ -8,12 +8,20 @@
       <h1 class="text-2xl font-bold text-gray-800">Vendas</h1>
       <p class="text-sm text-gray-500">Visão financeira e gestão de vendas</p>
     </div>
-    <a
-      href="{% url 'exportar_vendas_csv' %}"
-      class="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black"
-    >
-      Exportar CSV
-    </a>
+    <div class="flex flex-wrap gap-2">
+      <a
+        href="{% url 'exportar_vendas_csv' %}"
+        class="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black"
+      >
+        Exportar vendas
+      </a>
+      <a
+        href="{% url 'exportar_vendas_clientes_csv' %}"
+        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-100"
+      >
+        Exportar por cliente
+      </a>
+    </div>
   </header>
 
   {% if messages %}
@@ -45,6 +53,64 @@
     <div class="bg-white p-4 rounded-lg shadow border">
       <p class="text-sm text-gray-500">Ticket médio</p>
       <p class="text-2xl font-bold">R$ {{ ticket_medio_30d|floatformat:2 }}</p>
+    </div>
+  </section>
+
+  <section class="bg-white rounded-lg shadow border overflow-hidden">
+    <div class="p-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div>
+        <h2 class="text-lg font-bold text-gray-800">Resumo por Cliente</h2>
+        <p class="text-sm text-gray-500">Totais consolidados e fiados pendentes</p>
+      </div>
+      <a
+        href="{% url 'exportar_vendas_clientes_csv' %}"
+        class="inline-flex items-center px-3 py-2 text-sm border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-100"
+      >
+        Baixar CSV
+      </a>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-100 text-gray-600">
+          <tr>
+            <th class="px-4 py-3 text-left">Cliente</th>
+            <th class="px-4 py-3 text-right">Total</th>
+            <th class="px-4 py-3 text-right">Saldo Devedor</th>
+            <th class="px-4 py-3 text-right">Qtd Vendas</th>
+            <th class="px-4 py-3 text-right">Qtd Fiado</th>
+            <th class="px-4 py-3 text-center">A??o</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y">
+          {% for row in vendas_por_cliente %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-3 font-medium">{{ row.cliente_nome }}</td>
+            <td class="px-4 py-3 text-right">R$ {{ row.total_geral|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right text-red-600">R$ {{ row.total_fiado|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right">{{ row.qtd }}</td>
+            <td class="px-4 py-3 text-right">{{ row.qtd_fiado }}</td>
+            <td class="px-4 py-3 text-center">
+              {% if row.cliente_id and row.qtd_fiado > 0 %}
+              <form method="post" action="{% url 'quitar_cliente_fiados' row.cliente_id %}">
+                {% csrf_token %}
+                <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
+                  Quitar tudo
+                </button>
+              </form>
+              {% else %}
+              <span class="text-xs text-gray-400">???</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="px-4 py-6 text-center text-gray-500">Nenhum cliente encontrado</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </section>
 

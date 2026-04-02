@@ -38,9 +38,10 @@ class ProdutoAdmin(admin.ModelAdmin):
 
 @admin.register(Cliente)
 class ClienteAdmin(admin.ModelAdmin):
-    list_display = ['nome', 'codigo_cartao', 'telefone', 'ativo']
+    list_display = ['nome', 'codigo_cartao', 'telefone', 'ativo', 'criado_em']
     list_filter = ['ativo']
     search_fields = ['nome', 'codigo_cartao']
+    readonly_fields = ['criado_em']
 
 
 class ItemVendaInline(admin.TabularInline):
