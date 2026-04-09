@@ -38,19 +38,26 @@ Single Django app (`core`) with no frontend framework — server-rendered HTML t
 - `/` — login
 - `/pos/` — cashier POS interface (authenticated)
 - `/produtos/`, `/vendas/`, `/estoque/` — admin-only dashboards (superuser)
+- `/vendas/?mes=&ano=` — vendas dashboard, scoped to a month (defaults to current)
+- `/vendas/lancamento/` — bulk monthly sale entry (admin; no stock decrement, custom date)
+- `/vendas/fatura/<id>/<ano>/<mes>/` — download per-client fiado fatura as XLSX (admin)
+- `/vendas/<id>/quitar/` — mark a single fiado sale as paid
+- `/clientes/<id>/quitar-fiados/` — POST with `mes`/`ano` to quitar all fiados for a client in a given month
+- `/vendas/export.csv` — full CSV export
+- `/relatorio/mensal/` — monthly report dashboard with product breakdown and SERVICOS distinction (admin)
+- `/relatorio/mensal.xlsx` — XLSX export of the monthly report (`?mes=&ano=`)
 - `/api/buscar-cliente/` — JSON: search customer by name or card code
 - `/api/finalizar-venda/` — JSON: finalize a sale with items, discount, and payment method
-- `/vendas/<id>/quitar/` — mark a credit (fiado) sale as paid
-- `/vendas/export.csv` — CSV export
 
 **Access control:** `@login_required` for authenticated pages; `@admin_required` (custom decorator, checks `request.user.is_superuser`) for admin-only views.
 
 ## Key Models
 
-- **Produto** — has `estoque` field; `estoque = 0` means no inventory tracking. Stock is decremented on sale only when `estoque > 0`.
-- **Venda** — links to `Cliente` (nullable for walk-in), `operador` (User), and holds `subtotal`, `desconto_percentual`, `desconto_valor`, `total`. Payment: `DIN` (cash), `CAR` (card), `PIX`, `FIA` (fiado/credit).
+- **Produto** — has `estoque` field; `estoque = 0` means no inventory tracking. Stock is decremented on sale only when `estoque > 0`. Has `produto_estoque` (FK to self) and `fator_estoque` for linked stock consumption (e.g. pizza slices). `custo` tracks weighted average cost, updated on stock entry.
+- **Categoria** — products belong to a category. The `servicos` slug (category "SERVIÇOS") is special: products in it appear in the monthly report but are excluded from Lucro Cantina (they have a separate subtotal row).
+- **Venda** — links to `Cliente` (nullable for walk-in), `operador` (User), and holds `subtotal`, `desconto_percentual`, `desconto_valor`, `total`. Payment: `DIN` (cash), `CAR` (card), `PIX`, `FIA` (fiado/credit). `data_hora` defaults to `timezone.now` but can be set explicitly (used by bulk monthly entry).
 - **ItemVenda** — sale line items; `preco_unitario` is copied from product at sale time.
-- **MovimentacaoEstoque** — manual stock adjustments with `ENT` (entry) or `PER` (loss) types.
+- **MovimentacaoEstoque** — manual stock adjustments with `ENT` (entry) or `PER` (loss) types. `custo_unitario` on ENT entries updates the product's weighted average cost.
 
 ## Business Rules
 
@@ -58,6 +65,9 @@ Single Django app (`core`) with no frontend framework — server-rendered HTML t
 - Credit sales (`FIA`): require an identified customer (`cliente` must be set).
 - Stock check: if `produto.estoque > 0`, reject sale if stock is insufficient; decrement on finalize.
 - `finalizar_venda` runs inside `@transaction.atomic()` with `select_for_update()` on products to prevent race conditions.
+- **Bulk monthly entry** (`/vendas/lancamento/`): creates a `Venda` with a custom `data_hora` (date chosen by admin, time set to noon). Does NOT decrement stock — intended for historical/end-of-month reconciliation. Only DIN/CAR/PIX allowed (no FIA).
+- **Faturas**: a "fatura" is a conceptual grouping of `Venda` records with `forma_pagamento='FIA'` for a given client × month. No separate model — just a filtered view + XLSX export. Quitar is scoped to client + month via `mes`/`ano` POST params.
+- **Monthly report**: `_build_relatorio_rows(ano, mes)` is a shared helper used by both the dashboard view and the XLSX export. It separates SERVICOS (by `categoria__slug == 'servicos'`) from Cantina products for independent profit subtotals.
 
 ## API Response Convention
 
