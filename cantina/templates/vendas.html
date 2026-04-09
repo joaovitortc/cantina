@@ -1,19 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Vendas{% endblock %}
+{% block title %}Vendas — {{ mes_nome }} {{ ano }}{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-8">
+
+  <!-- Header -->
   <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
     <div>
       <h1 class="text-2xl font-bold text-gray-800">Vendas</h1>
-      <p class="text-sm text-gray-500">Visão financeira e gestão de vendas</p>
+      <p class="text-sm text-gray-500">{{ mes_nome }} {{ ano }}</p>
     </div>
     <div class="flex flex-wrap gap-2">
       <a
         href="{% url 'exportar_vendas_csv' %}"
         class="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black"
       >
-        Exportar vendas
+        Exportar vendas (CSV)
       </a>
       <a
         href="{% url 'exportar_vendas_clientes_csv' %}"
@@ -34,40 +36,52 @@
   </section>
   {% endif %}
 
+  <!-- Month navigation -->
+  <nav class="flex items-center gap-2">
+    <a
+      href="{% url 'vendas' %}?mes={{ prev_mes }}&ano={{ prev_ano }}"
+      class="px-3 py-2 border rounded-lg hover:bg-gray-100 text-gray-700 font-medium"
+    >
+      ← Anterior
+    </a>
+    <span class="px-4 py-2 bg-gray-900 text-white rounded-lg font-semibold">
+      {{ mes_nome }} {{ ano }}
+    </span>
+    <a
+      href="{% url 'vendas' %}?mes={{ next_mes }}&ano={{ next_ano }}"
+      class="px-3 py-2 border rounded-lg hover:bg-gray-100 text-gray-700 font-medium"
+    >
+      Próximo →
+    </a>
+  </nav>
+
+  <!-- Metric cards -->
   <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
     <div class="bg-white p-4 rounded-lg shadow border">
-      <p class="text-sm text-gray-500">Total a receber (Fiado)</p>
-      <p class="text-2xl font-bold text-red-600">R$ {{ total_a_receber|floatformat:2 }}</p>
+      <p class="text-sm text-gray-500">Fiado pendente (mês)</p>
+      <p class="text-2xl font-bold text-red-600">R$ {{ total_a_receber_mes|floatformat:2 }}</p>
     </div>
-
     <div class="bg-white p-4 rounded-lg shadow border">
-      <p class="text-sm text-gray-500">Faturamento (30 dias)</p>
-      <p class="text-2xl font-bold text-green-600">R$ {{ faturamento_30d|floatformat:2 }}</p>
+      <p class="text-sm text-gray-500">Faturamento (mês)</p>
+      <p class="text-2xl font-bold text-green-600">R$ {{ faturamento_mes|floatformat:2 }}</p>
     </div>
-
     <div class="bg-white p-4 rounded-lg shadow border">
-      <p class="text-sm text-gray-500">Vendas (30 dias)</p>
-      <p class="text-2xl font-bold">{{ qtd_vendas_30d }}</p>
+      <p class="text-sm text-gray-500">Vendas (mês)</p>
+      <p class="text-2xl font-bold">{{ qtd_vendas_mes }}</p>
     </div>
-
     <div class="bg-white p-4 rounded-lg shadow border">
       <p class="text-sm text-gray-500">Ticket médio</p>
-      <p class="text-2xl font-bold">R$ {{ ticket_medio_30d|floatformat:2 }}</p>
+      <p class="text-2xl font-bold">R$ {{ ticket_medio_mes|floatformat:2 }}</p>
     </div>
   </section>
 
+  <!-- Fiado por cliente (this month) -->
   <section class="bg-white rounded-lg shadow border overflow-hidden">
     <div class="p-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
       <div>
-        <h2 class="text-lg font-bold text-gray-800">Resumo por Cliente</h2>
-        <p class="text-sm text-gray-500">Totais consolidados e fiados pendentes</p>
+        <h2 class="text-lg font-bold text-gray-800">Fiado — {{ mes_nome }} {{ ano }}</h2>
+        <p class="text-sm text-gray-500">Faturas de crédito do mês, por cliente</p>
       </div>
-      <a
-        href="{% url 'exportar_vendas_clientes_csv' %}"
-        class="inline-flex items-center px-3 py-2 text-sm border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-100"
-      >
-        Baixar CSV
-      </a>
     </div>
 
     <div class="overflow-x-auto">
@@ -75,38 +89,59 @@
         <thead class="bg-gray-100 text-gray-600">
           <tr>
             <th class="px-4 py-3 text-left">Cliente</th>
-            <th class="px-4 py-3 text-right">Total</th>
-            <th class="px-4 py-3 text-right">Saldo Devedor</th>
-            <th class="px-4 py-3 text-right">Qtd Vendas</th>
-            <th class="px-4 py-3 text-right">Qtd Fiado</th>
-            <th class="px-4 py-3 text-center">A??o</th>
+            <th class="px-4 py-3 text-right">Total Fiado</th>
+            <th class="px-4 py-3 text-right">Pendente</th>
+            <th class="px-4 py-3 text-right">Qtd</th>
+            <th class="px-4 py-3 text-center">Status</th>
+            <th class="px-4 py-3 text-center">Ações</th>
           </tr>
         </thead>
-
         <tbody class="divide-y">
-          {% for row in vendas_por_cliente %}
+          {% for row in fiados_por_cliente %}
           <tr class="hover:bg-gray-50">
             <td class="px-4 py-3 font-medium">{{ row.cliente_nome }}</td>
-            <td class="px-4 py-3 text-right">R$ {{ row.total_geral|floatformat:2 }}</td>
-            <td class="px-4 py-3 text-right text-red-600">R$ {{ row.total_fiado|floatformat:2 }}</td>
-            <td class="px-4 py-3 text-right">{{ row.qtd }}</td>
+            <td class="px-4 py-3 text-right">R$ {{ row.total_fiado|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right {% if row.total_pendente > 0 %}text-red-600 font-semibold{% else %}text-gray-400{% endif %}">
+              R$ {{ row.total_pendente|floatformat:2 }}
+            </td>
             <td class="px-4 py-3 text-right">{{ row.qtd_fiado }}</td>
             <td class="px-4 py-3 text-center">
-              {% if row.cliente_id and row.qtd_fiado > 0 %}
-              <form method="post" action="{% url 'quitar_cliente_fiados' row.cliente_id %}">
-                {% csrf_token %}
-                <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
-                  Quitar tudo
-                </button>
-              </form>
+              {% if row.quitada %}
+              <span class="inline-flex px-2 py-1 text-xs rounded font-semibold bg-green-100 text-green-700">Quitado</span>
               {% else %}
-              <span class="text-xs text-gray-400">???</span>
+              <span class="inline-flex px-2 py-1 text-xs rounded font-semibold bg-red-100 text-red-700">Pendente</span>
               {% endif %}
+            </td>
+            <td class="px-4 py-3 text-center">
+              <div class="flex items-center justify-center gap-2 flex-wrap">
+                {% if row.cliente_id %}
+                <a
+                  href="{% url 'baixar_fatura_cliente' row.cliente_id ano mes %}"
+                  class="px-3 py-1 rounded border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                >
+                  Baixar Fatura
+                </a>
+                {% if not row.quitada %}
+                <form method="post" action="{% url 'quitar_cliente_fiados' row.cliente_id %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="mes" value="{{ mes }}" />
+                  <input type="hidden" name="ano" value="{{ ano }}" />
+                  <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
+                    Quitar tudo
+                  </button>
+                </form>
+                {% endif %}
+                {% else %}
+                <span class="text-xs text-gray-400">—</span>
+                {% endif %}
+              </div>
             </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="6" class="px-4 py-6 text-center text-gray-500">Nenhum cliente encontrado</td>
+            <td colspan="6" class="px-4 py-6 text-center text-gray-500">
+              Nenhum fiado em {{ mes_nome }} {{ ano }}.
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -114,9 +149,10 @@
     </div>
   </section>
 
+  <!-- Vendas do mês -->
   <section class="bg-white rounded-lg shadow border overflow-hidden">
     <div class="p-4 border-b">
-      <h2 class="text-lg font-bold text-gray-800">Vendas Recentes</h2>
+      <h2 class="text-lg font-bold text-gray-800">Todas as Vendas — {{ mes_nome }} {{ ano }}</h2>
     </div>
 
     <div class="overflow-x-auto">
@@ -133,7 +169,6 @@
             <th class="px-4 py-3 text-center">Ação</th>
           </tr>
         </thead>
-
         <tbody class="divide-y">
           {% for venda in vendas %}
           <tr class="hover:bg-gray-50">
@@ -143,7 +178,6 @@
             <td class="px-4 py-3 text-right">R$ {{ venda.subtotal|floatformat:2 }}</td>
             <td class="px-4 py-3 text-right text-red-600">- R$ {{ venda.desconto_valor|floatformat:2 }}</td>
             <td class="px-4 py-3 text-right font-semibold">R$ {{ venda.total|floatformat:2 }}</td>
-
             <td class="px-4 py-3 text-center">
               {% if venda.paga %}
               <span class="inline-flex px-2 py-1 text-xs rounded font-semibold bg-green-100 text-green-700">Paga</span>
@@ -151,13 +185,12 @@
               <span class="inline-flex px-2 py-1 text-xs rounded font-semibold bg-red-100 text-red-700">Fiado</span>
               {% endif %}
             </td>
-
             <td class="px-4 py-3 text-center">
               {% if not venda.paga %}
               <form method="post" action="{% url 'quitar_venda' venda.id %}">
                 {% csrf_token %}
                 <button class="px-3 py-1 rounded bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
-                  Marcar como paga
+                  Marcar paga
                 </button>
               </form>
               {% else %}
@@ -167,12 +200,13 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="8" class="px-4 py-6 text-center text-gray-500">Nenhuma venda encontrada</td>
+            <td colspan="8" class="px-4 py-6 text-center text-gray-500">Nenhuma venda em {{ mes_nome }} {{ ano }}.</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </section>
+
 </div>
 {% endblock %}

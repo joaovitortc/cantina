@@ -3,6 +3,7 @@ import io
 import json
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import login, logout
@@ -12,6 +13,7 @@ from django.db import transaction
 from django.db.models import Avg, Count, Prefetch, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -264,76 +266,86 @@ def produtos_list(request):
     )
 
 
+MESES_NOMES = [
+    '', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+
 @login_required
 @admin_required
 def vendas_dashboard(request):
     hoje = timezone.now()
-    inicio_30d = hoje - timedelta(days=30)
 
-    total_a_receber = (
-        Venda.objects
-        .filter(paga=False)
-        .aggregate(total=Sum('total'))
-        ['total'] or 0
+    try:
+        mes = int(request.GET.get('mes', hoje.month))
+        ano = int(request.GET.get('ano', hoje.year))
+        if not (1 <= mes <= 12):
+            raise ValueError
+    except (ValueError, TypeError):
+        mes = hoje.month
+        ano = hoje.year
+
+    vendas_mes = Venda.objects.filter(data_hora__year=ano, data_hora__month=mes)
+    fiados_mes = vendas_mes.filter(forma_pagamento='FIA')
+
+    total_a_receber_mes = (
+        fiados_mes.filter(paga=False).aggregate(total=Sum('total'))['total'] or 0
     )
+    faturamento_mes = vendas_mes.aggregate(total=Sum('total'))['total'] or 0
+    qtd_vendas_mes = vendas_mes.count()
+    ticket_medio_mes = vendas_mes.aggregate(media=Avg('total'))['media'] or 0
 
-    vendas_30d = Venda.objects.filter(data_hora__gte=inicio_30d)
-
-    faturamento_30d = (
-        vendas_30d
-        .aggregate(total=Sum('total'))
-        ['total'] or 0
-    )
-
-    qtd_vendas_30d = vendas_30d.count()
-
-    ticket_medio_30d = (
-        vendas_30d
-        .aggregate(media=Avg('total'))
-        ['media'] or 0
-    )
-
-    vendas = (
-        Venda.objects
-        .select_related('cliente', 'operador')
-        .order_by('-data_hora')[:30]
-    )
-
-    vendas_por_cliente_raw = (
-        Venda.objects
+    fiados_raw = (
+        fiados_mes
         .values('cliente_id', 'cliente__nome')
         .annotate(
-            total_geral=Sum('total'),
-            total_fiado=Sum('total', filter=Q(paga=False)),
-            qtd=Count('id'),
-            qtd_fiado=Count('id', filter=Q(paga=False)),
+            total_fiado=Sum('total'),
+            total_pendente=Sum('total', filter=Q(paga=False)),
+            qtd_fiado=Count('id'),
+            qtd_pendente=Count('id', filter=Q(paga=False)),
         )
-        .order_by('-total_geral')
+        .order_by('cliente__nome')
     )
 
-    vendas_por_cliente = []
-    for row in vendas_por_cliente_raw:
-        vendas_por_cliente.append({
+    fiados_por_cliente = []
+    for row in fiados_raw:
+        fiados_por_cliente.append({
             'cliente_id': row['cliente_id'],
             'cliente_nome': row['cliente__nome'] or 'Consumidor final',
-            'total_geral': row['total_geral'] or Decimal('0'),
             'total_fiado': row['total_fiado'] or Decimal('0'),
-            'qtd': row['qtd'] or 0,
+            'total_pendente': row['total_pendente'] or Decimal('0'),
             'qtd_fiado': row['qtd_fiado'] or 0,
+            'qtd_pendente': row['qtd_pendente'] or 0,
+            'quitada': (row['qtd_pendente'] or 0) == 0,
         })
 
-    return render(
-        request,
-        'vendas.html',
-        {
-            'total_a_receber': total_a_receber,
-            'faturamento_30d': faturamento_30d,
-            'qtd_vendas_30d': qtd_vendas_30d,
-            'ticket_medio_30d': ticket_medio_30d,
-            'vendas': vendas,
-            'vendas_por_cliente': vendas_por_cliente,
-        }
+    vendas = (
+        vendas_mes
+        .select_related('cliente', 'operador')
+        .order_by('-data_hora')[:50]
     )
+
+    prev_mes = mes - 1 if mes > 1 else 12
+    prev_ano = ano if mes > 1 else ano - 1
+    next_mes = mes + 1 if mes < 12 else 1
+    next_ano = ano if mes < 12 else ano + 1
+
+    return render(request, 'vendas.html', {
+        'total_a_receber_mes': total_a_receber_mes,
+        'faturamento_mes': faturamento_mes,
+        'qtd_vendas_mes': qtd_vendas_mes,
+        'ticket_medio_mes': ticket_medio_mes,
+        'fiados_por_cliente': fiados_por_cliente,
+        'vendas': vendas,
+        'mes': mes,
+        'ano': ano,
+        'mes_nome': MESES_NOMES[mes],
+        'prev_mes': prev_mes,
+        'prev_ano': prev_ano,
+        'next_mes': next_mes,
+        'next_ano': next_ano,
+    })
 
 
 @login_required
@@ -423,16 +435,27 @@ def exportar_vendas_clientes_csv(request):
 def quitar_cliente_fiados(request, cliente_id):
     cliente = get_object_or_404(Cliente, id=cliente_id, ativo=True)
 
-    pendentes = Venda.objects.filter(cliente=cliente, paga=False)
-    qtd = pendentes.count()
+    try:
+        mes = int(request.POST.get('mes', 0))
+        ano = int(request.POST.get('ano', 0))
+        if not (1 <= mes <= 12) or ano < 2000:
+            raise ValueError
+    except (ValueError, TypeError):
+        mes = ano = 0
 
+    pendentes = Venda.objects.filter(cliente=cliente, paga=False, forma_pagamento='FIA')
+    if mes and ano:
+        pendentes = pendentes.filter(data_hora__year=ano, data_hora__month=mes)
+
+    qtd = pendentes.count()
     if qtd == 0:
         messages.info(request, f'Nenhuma venda fiada pendente para {cliente.nome}.')
-        return redirect('vendas')
+    else:
+        pendentes.update(paga=True, quitada_em=timezone.now())
+        messages.success(request, f'{qtd} venda(s) de {cliente.nome} foram quitadas.')
 
-    pendentes.update(paga=True, quitada_em=timezone.now())
-    messages.success(request, f'{qtd} venda(s) de {cliente.nome} foram quitadas.')
-    return redirect('vendas')
+    qs = urlencode({'mes': mes, 'ano': ano}) if mes and ano else ''
+    return redirect(f"{reverse('vendas')}?{qs}" if qs else reverse('vendas'))
 
 
 @login_required
@@ -609,10 +632,110 @@ def lancar_venda_mensal(request):
     })
 
 
+SLUG_SERVICOS = 'servicos'
+
+
+def _build_relatorio_rows(ano, mes):
+    """Returns (rows, totals) for the monthly report. Shared by dashboard and XLSX views."""
+    itens = list(
+        ItemVenda.objects
+        .filter(venda__data_hora__year=ano, venda__data_hora__month=mes)
+        .values('produto__id', 'produto__nome', 'produto__categoria__slug', 'produto__categoria__nome')
+        .annotate(qtd_total=Sum('quantidade'), valor_total=Sum('subtotal'))
+        .order_by('produto__categoria__nome', 'produto__nome')
+    )
+
+    produto_ids = [i['produto__id'] for i in itens]
+    custos = {p.id: p.custo for p in Produto.objects.filter(id__in=produto_ids)}
+
+    rows = []
+    cantina_valor = Decimal('0')
+    cantina_custo = Decimal('0')
+    servicos_valor = Decimal('0')
+    servicos_custo = Decimal('0')
+    total_qtd = 0
+
+    for item in itens:
+        qtd = item['qtd_total'] or 0
+        valor_total = Decimal(str(item['valor_total'] or 0))
+        custo_unit = Decimal(str(custos.get(item['produto__id'], 0) or 0))
+        valor_unit = (valor_total / qtd).quantize(Decimal('0.01')) if qtd else Decimal('0')
+        custo_total = (custo_unit * qtd).quantize(Decimal('0.01'))
+        lucro = (valor_total - custo_total).quantize(Decimal('0.01'))
+        is_servico = item['produto__categoria__slug'] == SLUG_SERVICOS
+
+        rows.append({
+            'nome': item['produto__nome'],
+            'categoria': item['produto__categoria__nome'],
+            'valor_unit': valor_unit,
+            'custo_unit': custo_unit,
+            'qtd': qtd,
+            'valor_total': valor_total,
+            'custo_total': custo_total,
+            'lucro': lucro,
+            'is_servico': is_servico,
+        })
+
+        total_qtd += qtd
+        if is_servico:
+            servicos_valor += valor_total
+            servicos_custo += custo_total
+        else:
+            cantina_valor += valor_total
+            cantina_custo += custo_total
+
+    totals = {
+        'cantina_valor': cantina_valor,
+        'cantina_custo': cantina_custo,
+        'cantina_lucro': cantina_valor - cantina_custo,
+        'servicos_valor': servicos_valor,
+        'servicos_custo': servicos_custo,
+        'servicos_lucro': servicos_valor - servicos_custo,
+        'geral_valor': cantina_valor + servicos_valor,
+        'geral_custo': cantina_custo + servicos_custo,
+        'geral_lucro': (cantina_valor + servicos_valor) - (cantina_custo + servicos_custo),
+        'total_qtd': total_qtd,
+    }
+    return rows, totals
+
+
+@login_required
+@admin_required
+def relatorio_mensal_dashboard(request):
+    now = timezone.now()
+    try:
+        mes = int(request.GET.get('mes', now.month))
+        ano = int(request.GET.get('ano', now.year))
+        if not (1 <= mes <= 12):
+            raise ValueError
+    except (ValueError, TypeError):
+        mes = now.month
+        ano = now.year
+
+    rows, totals = _build_relatorio_rows(ano, mes)
+
+    prev_mes = mes - 1 if mes > 1 else 12
+    prev_ano = ano if mes > 1 else ano - 1
+    next_mes = mes + 1 if mes < 12 else 1
+    next_ano = ano if mes < 12 else ano + 1
+
+    return render(request, 'relatorio.html', {
+        'rows': rows,
+        'totals': totals,
+        'mes': mes,
+        'ano': ano,
+        'mes_nome': MESES_NOMES[mes],
+        'meses_list': list(enumerate(MESES_NOMES))[1:],
+        'prev_mes': prev_mes,
+        'prev_ano': prev_ano,
+        'next_mes': next_mes,
+        'next_ano': next_ano,
+    })
+
+
 @login_required
 @admin_required
 def relatorio_mensal_xlsx(request):
-    """Exporta relatório mensal de vendas em XLSX."""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
 
@@ -626,19 +749,7 @@ def relatorio_mensal_xlsx(request):
         mes = now.month
         ano = now.year
 
-    itens = list(
-        ItemVenda.objects
-        .filter(venda__data_hora__year=ano, venda__data_hora__month=mes)
-        .values('produto__id', 'produto__nome')
-        .annotate(
-            qtd_total=Sum('quantidade'),
-            valor_total=Sum('subtotal'),
-        )
-        .order_by('produto__nome')
-    )
-
-    produto_ids = [i['produto__id'] for i in itens]
-    custos = {p.id: p.custo for p in Produto.objects.filter(id__in=produto_ids)}
+    rows, totals = _build_relatorio_rows(ano, mes)
 
     wb = Workbook()
     ws = wb.active
@@ -647,56 +758,50 @@ def relatorio_mensal_xlsx(request):
     header_font = Font(bold=True, color='FFFFFF')
     header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
     center = Alignment(horizontal='center')
+    currency_fmt = 'R$ #,##0.00'
+    total_font = Font(bold=True)
 
-    headers = ['Produto', 'Valor Unitário', 'Custo', 'Qtd', 'Valor Total', 'Custo Total', 'Lucro']
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=header)
+    headers = ['Categoria', 'Produto', 'Valor Unitário', 'Custo', 'Qtd', 'Valor Total', 'Custo Total', 'Lucro']
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = center
 
-    currency_fmt = 'R$ #,##0.00'
-    total_valor = Decimal('0')
-    total_custo_sum = Decimal('0')
-    total_qtd = 0
+    for row_num, r in enumerate(rows, 2):
+        ws.cell(row=row_num, column=1, value=r['categoria'])
+        ws.cell(row=row_num, column=2, value=r['nome'])
+        ws.cell(row=row_num, column=3, value=float(r['valor_unit'])).number_format = currency_fmt
+        ws.cell(row=row_num, column=4, value=float(r['custo_unit'])).number_format = currency_fmt
+        ws.cell(row=row_num, column=5, value=r['qtd'])
+        ws.cell(row=row_num, column=6, value=float(r['valor_total'])).number_format = currency_fmt
+        ws.cell(row=row_num, column=7, value=float(r['custo_total'])).number_format = currency_fmt
+        ws.cell(row=row_num, column=8, value=float(r['lucro'])).number_format = currency_fmt
 
-    for row_num, item in enumerate(itens, 2):
-        qtd = item['qtd_total'] or 0
-        valor_total = item['valor_total'] or Decimal('0')
-        custo_unit = Decimal(str(custos.get(item['produto__id'], 0) or 0))
-        valor_unit = (valor_total / qtd).quantize(Decimal('0.01')) if qtd else Decimal('0')
-        custo_total = (custo_unit * qtd).quantize(Decimal('0.01'))
-        lucro = (valor_total - custo_total).quantize(Decimal('0.01'))
+    # Two summary rows
+    cantina_row = len(rows) + 2
+    geral_row = cantina_row + 1
 
-        ws.cell(row=row_num, column=1, value=item['produto__nome'])
-        ws.cell(row=row_num, column=2, value=float(valor_unit)).number_format = currency_fmt
-        ws.cell(row=row_num, column=3, value=float(custo_unit)).number_format = currency_fmt
-        ws.cell(row=row_num, column=4, value=qtd)
-        ws.cell(row=row_num, column=5, value=float(valor_total)).number_format = currency_fmt
-        ws.cell(row=row_num, column=6, value=float(custo_total)).number_format = currency_fmt
-        ws.cell(row=row_num, column=7, value=float(lucro)).number_format = currency_fmt
+    cantina_fill = PatternFill(start_color='DBEAFE', end_color='DBEAFE', fill_type='solid')
+    geral_fill = PatternFill(start_color='D1FAE5', end_color='D1FAE5', fill_type='solid')
 
-        total_valor += valor_total
-        total_custo_sum += custo_total
-        total_qtd += qtd
+    for col, (label, fill, key_val, key_custo, key_lucro) in enumerate([
+        ('Total Cantina', cantina_fill, 'cantina_valor', 'cantina_custo', 'cantina_lucro'),
+        ('Total Geral',   geral_fill,  'geral_valor',   'geral_custo',   'geral_lucro'),
+    ], 0):
+        row = cantina_row + col
+        fill_obj = cantina_fill if col == 0 else geral_fill
+        label_text = 'Total Cantina' if col == 0 else 'Total Geral (c/ Serviços)'
+        ws.cell(row=row, column=1, value=label_text).font = total_font
+        ws.cell(row=row, column=6, value=float(totals[key_val])).number_format = currency_fmt
+        ws.cell(row=row, column=7, value=float(totals[key_custo])).number_format = currency_fmt
+        ws.cell(row=row, column=8, value=float(totals[key_lucro])).number_format = currency_fmt
+        for c in range(1, 9):
+            cell = ws.cell(row=row, column=c)
+            cell.font = total_font
+            cell.fill = fill_obj
 
-    total_lucro = total_valor - total_custo_sum
-    total_row = len(itens) + 2
-    total_font = Font(bold=True)
-    total_fill = PatternFill(start_color='E5E7EB', end_color='E5E7EB', fill_type='solid')
-
-    ws.cell(row=total_row, column=1, value='TOTAL').font = total_font
-    ws.cell(row=total_row, column=4, value=total_qtd).font = total_font
-    ws.cell(row=total_row, column=5, value=float(total_valor)).number_format = currency_fmt
-    ws.cell(row=total_row, column=6, value=float(total_custo_sum)).number_format = currency_fmt
-    ws.cell(row=total_row, column=7, value=float(total_lucro)).number_format = currency_fmt
-
-    for col in range(1, 8):
-        cell = ws.cell(row=total_row, column=col)
-        cell.font = total_font
-        cell.fill = total_fill
-
-    col_widths = [30, 16, 12, 8, 16, 14, 14]
+    col_widths = [18, 28, 16, 12, 8, 16, 14, 14]
     for col, width in enumerate(col_widths, 1):
         ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = width
 
@@ -705,6 +810,93 @@ def relatorio_mensal_xlsx(request):
     buffer.seek(0)
 
     filename = f"relatorio_{ano}_{mes:02d}.xlsx"
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+@admin_required
+def baixar_fatura_cliente(request, cliente_id, ano, mes):
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    cliente = get_object_or_404(Cliente, id=cliente_id)
+
+    vendas = (
+        Venda.objects
+        .filter(cliente=cliente, forma_pagamento='FIA', data_hora__year=ano, data_hora__month=mes)
+        .prefetch_related('itens__produto')
+        .order_by('data_hora')
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Fatura {mes:02d}-{ano}"
+
+    ws.merge_cells('A1:F1')
+    title = ws['A1']
+    title.value = f"Fatura — {cliente.nome} — {MESES_NOMES[mes]}/{ano}"
+    title.font = Font(bold=True, size=13)
+
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    currency_fmt = 'R$ #,##0.00'
+
+    for col, h in enumerate(['Data', 'Produto', 'Qtd', 'Preço Unit.', 'Total', 'Status'], 1):
+        cell = ws.cell(row=2, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+
+    row_num = 3
+    total_geral = Decimal('0')
+    total_pendente = Decimal('0')
+
+    for venda in vendas:
+        for item in venda.itens.all():
+            ws.cell(row=row_num, column=1, value=venda.data_hora.strftime('%d/%m/%Y'))
+            ws.cell(row=row_num, column=2, value=item.produto.nome)
+            ws.cell(row=row_num, column=3, value=item.quantidade)
+            ws.cell(row=row_num, column=4, value=float(item.preco_unitario)).number_format = currency_fmt
+            ws.cell(row=row_num, column=5, value=float(item.subtotal)).number_format = currency_fmt
+            ws.cell(row=row_num, column=6, value='Pago' if venda.paga else 'Pendente')
+            row_num += 1
+        total_geral += venda.total
+        if not venda.paga:
+            total_pendente += venda.total
+
+    total_font = Font(bold=True)
+    total_fill = PatternFill(start_color='E5E7EB', end_color='E5E7EB', fill_type='solid')
+    pending_font = Font(bold=True, color='DC2626')
+    pending_fill = PatternFill(start_color='FEE2E2', end_color='FEE2E2', fill_type='solid')
+
+    for c in range(1, 7):
+        ws.cell(row=row_num, column=c).fill = total_fill
+    ws.cell(row=row_num, column=1, value='TOTAL').font = total_font
+    ws.cell(row=row_num, column=5, value=float(total_geral)).number_format = currency_fmt
+    ws.cell(row=row_num, column=5).font = total_font
+
+    if total_pendente > 0:
+        row_num += 1
+        for c in range(1, 7):
+            ws.cell(row=row_num, column=c).fill = pending_fill
+        ws.cell(row=row_num, column=1, value='PENDENTE').font = pending_font
+        ws.cell(row=row_num, column=5, value=float(total_pendente)).number_format = currency_fmt
+        ws.cell(row=row_num, column=5).font = pending_font
+
+    for col, width in enumerate([12, 30, 6, 14, 14, 10], 1):
+        ws.column_dimensions[ws.cell(row=2, column=col).column_letter].width = width
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    safe_nome = ''.join(c if c.isalnum() else '_' for c in cliente.nome)
+    filename = f"fatura_{safe_nome}_{ano}_{mes:02d}.xlsx"
     response = HttpResponse(
         buffer.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

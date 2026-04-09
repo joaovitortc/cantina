@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Relatório Mensal — {{ mes_nome }} {{ ano }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-8">
+
+  <!-- Header -->
+  <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">Relatório Mensal</h1>
+      <p class="text-sm text-gray-500">{{ mes_nome }} {{ ano }}</p>
+    </div>
+    <a
+      href="{% url 'relatorio_mensal_xlsx' %}?mes={{ mes }}&ano={{ ano }}"
+      class="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black"
+    >
+      Exportar XLSX
+    </a>
+  </header>
+
+  <!-- Month navigation -->
+  <nav class="flex items-center gap-2">
+    <a
+      href="{% url 'relatorio_mensal' %}?mes={{ prev_mes }}&ano={{ prev_ano }}"
+      class="px-3 py-2 border rounded-lg hover:bg-gray-100 text-gray-700 font-medium"
+    >
+      ← Anterior
+    </a>
+
+    <form method="get" action="{% url 'relatorio_mensal' %}" class="flex items-center gap-2">
+      <select name="mes" class="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        {% for n, nome in meses_list %}
+        <option value="{{ n }}" {% if n == mes %}selected{% endif %}>{{ nome }}</option>
+        {% endfor %}
+      </select>
+      <input
+        type="number"
+        name="ano"
+        value="{{ ano }}"
+        min="2020"
+        max="2099"
+        class="border rounded-lg px-3 py-2 w-24 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+      />
+      <button type="submit" class="px-3 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-black">
+        Ir
+      </button>
+    </form>
+
+    <a
+      href="{% url 'relatorio_mensal' %}?mes={{ next_mes }}&ano={{ next_ano }}"
+      class="px-3 py-2 border rounded-lg hover:bg-gray-100 text-gray-700 font-medium"
+    >
+      Próximo →
+    </a>
+  </nav>
+
+  <!-- Summary cards -->
+  <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="bg-white p-4 rounded-lg shadow border">
+      <p class="text-sm text-gray-500">Lucro Cantina</p>
+      <p class="text-2xl font-bold text-green-600">R$ {{ totals.cantina_lucro|floatformat:2 }}</p>
+      <p class="text-xs text-gray-400 mt-1">Faturamento: R$ {{ totals.cantina_valor|floatformat:2 }} | Custo: R$ {{ totals.cantina_custo|floatformat:2 }}</p>
+    </div>
+    <div class="bg-white p-4 rounded-lg shadow border">
+      <p class="text-sm text-gray-500">Lucro Serviços</p>
+      <p class="text-2xl font-bold text-blue-600">R$ {{ totals.servicos_lucro|floatformat:2 }}</p>
+      <p class="text-xs text-gray-400 mt-1">Faturamento: R$ {{ totals.servicos_valor|floatformat:2 }} | Custo: R$ {{ totals.servicos_custo|floatformat:2 }}</p>
+    </div>
+    <div class="bg-white p-4 rounded-lg shadow border border-gray-300">
+      <p class="text-sm text-gray-500">Lucro Total</p>
+      <p class="text-2xl font-bold text-gray-800">R$ {{ totals.geral_lucro|floatformat:2 }}</p>
+      <p class="text-xs text-gray-400 mt-1">Faturamento: R$ {{ totals.geral_valor|floatformat:2 }} | Custo: R$ {{ totals.geral_custo|floatformat:2 }}</p>
+    </div>
+  </section>
+
+  <!-- Product table -->
+  <section class="bg-white rounded-lg shadow border overflow-hidden">
+    <div class="p-4 border-b">
+      <h2 class="text-lg font-bold text-gray-800">Detalhamento por Produto</h2>
+    </div>
+
+    {% if rows %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-100 text-gray-600">
+          <tr>
+            <th class="px-4 py-3 text-left">Categoria</th>
+            <th class="px-4 py-3 text-left">Produto</th>
+            <th class="px-4 py-3 text-right">Valor Unit.</th>
+            <th class="px-4 py-3 text-right">Custo</th>
+            <th class="px-4 py-3 text-right">Qtd</th>
+            <th class="px-4 py-3 text-right">Valor Total</th>
+            <th class="px-4 py-3 text-right">Custo Total</th>
+            <th class="px-4 py-3 text-right">Lucro</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for row in rows %}
+          <tr class="hover:bg-gray-50 {% if row.is_servico %}bg-blue-50{% endif %}">
+            <td class="px-4 py-2 text-gray-500 text-xs">{{ row.categoria }}</td>
+            <td class="px-4 py-2 font-medium">{{ row.nome }}</td>
+            <td class="px-4 py-2 text-right">R$ {{ row.valor_unit|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right text-gray-500">R$ {{ row.custo_unit|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right">{{ row.qtd }}</td>
+            <td class="px-4 py-2 text-right">R$ {{ row.valor_total|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right text-gray-500">R$ {{ row.custo_total|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right font-semibold {% if row.lucro >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+              R$ {{ row.lucro|floatformat:2 }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <!-- Cantina subtotal -->
+          <tr class="bg-blue-50 border-t-2 border-blue-200">
+            <td colspan="4" class="px-4 py-3 font-bold text-gray-700">Total Cantina (sem Serviços)</td>
+            <td class="px-4 py-3 text-right font-bold">{{ totals.total_qtd }}</td>
+            <td class="px-4 py-3 text-right font-bold">R$ {{ totals.cantina_valor|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right font-bold text-gray-600">R$ {{ totals.cantina_custo|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right font-bold text-green-700">R$ {{ totals.cantina_lucro|floatformat:2 }}</td>
+          </tr>
+          <!-- Geral total -->
+          <tr class="bg-green-50 border-t border-green-200">
+            <td colspan="4" class="px-4 py-3 font-bold text-gray-700">Total Geral (c/ Serviços)</td>
+            <td class="px-4 py-3 text-right font-bold"></td>
+            <td class="px-4 py-3 text-right font-bold">R$ {{ totals.geral_valor|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right font-bold text-gray-600">R$ {{ totals.geral_custo|floatformat:2 }}</td>
+            <td class="px-4 py-3 text-right font-bold text-green-700">R$ {{ totals.geral_lucro|floatformat:2 }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-8 text-center text-gray-500">
+      Nenhuma venda registrada em {{ mes_nome }} {{ ano }}.
+    </div>
+    {% endif %}
+  </section>
+
+</div>
+{% endblock %}

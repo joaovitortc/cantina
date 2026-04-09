@@ -10,7 +10,7 @@
     </div>
     <a
       id="reportLink"
-      href="{% url 'relatorio_mensal_xlsx' %}"
+      href="{% url 'relatorio_mensal' %}"
       class="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black"
     >
       📑 Baixar Relatório Mensal
@@ -171,7 +171,7 @@
     const val = dataInput.value; // YYYY-MM-DD
     if (!val) return;
     const [ano, mes] = val.split('-');
-    reportLink.href = `{% url 'relatorio_mensal_xlsx' %}?mes=${parseInt(mes)}&ano=${ano}`;
+    reportLink.href = `{% url 'relatorio_mensal' %}?mes=${parseInt(mes)}&ano=${ano}`;
   }
 
   qtyInputs.forEach(input => input.addEventListener('input', recalculate));
