@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Lançamento Mensal{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-8">
+  <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">Lançamento Mensal</h1>
+      <p class="text-sm text-gray-500">Registre vendas de um período sem controle de estoque em tempo real</p>
+    </div>
+    <a
+      id="reportLink"
+      href="{% url 'relatorio_mensal_xlsx' %}"
+      class="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black"
+    >
+      📑 Baixar Relatório Mensal
+    </a>
+  </header>
+
+  {% if messages %}
+  <section class="space-y-2">
+    {% for message in messages %}
+    <div class="rounded-lg px-4 py-3 border {% if message.tags == 'success' %}bg-green-50 border-green-300 text-green-800{% elif message.tags == 'error' %}bg-red-50 border-red-300 text-red-800{% else %}bg-blue-50 border-blue-300 text-blue-800{% endif %}">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <form method="post" id="lancamentoForm">
+    {% csrf_token %}
+
+    <!-- Header fields -->
+    <section class="bg-white rounded-lg shadow border p-4 mb-6">
+      <h2 class="text-lg font-bold text-gray-800 mb-4">Dados da venda</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">Data da venda</label>
+          <input
+            type="date"
+            name="data"
+            id="dataInput"
+            value="{{ hoje }}"
+            required
+            class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">Forma de pagamento</label>
+          <div class="flex gap-2 mt-1">
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input type="radio" name="forma_pagamento" value="DIN" checked class="accent-gray-900" />
+              <span class="text-sm font-medium">Dinheiro</span>
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input type="radio" name="forma_pagamento" value="CAR" class="accent-gray-900" />
+              <span class="text-sm font-medium">Cartão</span>
+            </label>
+            <label class="flex items-center gap-1 cursor-pointer">
+              <input type="radio" name="forma_pagamento" value="PIX" class="accent-gray-900" />
+              <span class="text-sm font-medium">PIX</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Products per category -->
+    {% for categoria in categorias %}
+    {% if categoria.produtos_ativos %}
+    <section class="bg-white rounded-lg shadow border overflow-hidden mb-4">
+      <div class="px-4 py-3 bg-gray-50 border-b">
+        <h3 class="font-semibold text-gray-700">{{ categoria.nome }}</h3>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-gray-100 text-gray-600">
+          <tr>
+            <th class="px-4 py-2 text-left">Produto</th>
+            <th class="px-4 py-2 text-right">Preço</th>
+            <th class="px-4 py-2 text-right w-36">Quantidade</th>
+            <th class="px-4 py-2 text-right w-36">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y">
+          {% for produto in categoria.produtos_ativos %}
+          <tr class="hover:bg-gray-50" data-preco="{{ produto.preco }}">
+            <td class="px-4 py-2 font-medium">{{ produto.nome }}</td>
+            <td class="px-4 py-2 text-right text-gray-600">R$ {{ produto.preco|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right">
+              <input
+                type="number"
+                name="produto_{{ produto.id }}"
+                min="0"
+                value="0"
+                class="qty-input w-24 border rounded px-2 py-1 text-right focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                data-preco="{{ produto.preco }}"
+              />
+            </td>
+            <td class="px-4 py-2 text-right font-medium subtotal-cell text-gray-400">—</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+    {% endfor %}
+
+    <!-- Totals + Submit -->
+    <section class="bg-white rounded-lg shadow border p-4 sticky bottom-4">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="text-lg font-bold text-gray-800">
+          Total: <span id="totalGeral" class="text-green-600">R$ 0,00</span>
+          <span class="text-sm font-normal text-gray-500 ml-2">(<span id="totalItens">0</span> itens)</span>
+        </div>
+        <button
+          type="submit"
+          id="submitBtn"
+          class="px-6 py-3 bg-gray-900 text-white rounded-lg font-semibold hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Lançar Venda
+        </button>
+      </div>
+    </section>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const qtyInputs = document.querySelectorAll('.qty-input');
+  const totalGeralEl = document.getElementById('totalGeral');
+  const totalItensEl = document.getElementById('totalItens');
+  const submitBtn = document.getElementById('submitBtn');
+  const dataInput = document.getElementById('dataInput');
+  const reportLink = document.getElementById('reportLink');
+
+  function fmt(val) {
+    return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  function recalculate() {
+    let total = 0;
+    let itens = 0;
+
+    qtyInputs.forEach(input => {
+      const qty = parseInt(input.value) || 0;
+      const preco = parseFloat(input.dataset.preco) || 0;
+      const sub = qty * preco;
+      const row = input.closest('tr');
+      const cell = row.querySelector('.subtotal-cell');
+
+      if (qty > 0) {
+        cell.textContent = fmt(sub);
+        cell.classList.remove('text-gray-400');
+        cell.classList.add('text-gray-800');
+        total += sub;
+        itens += qty;
+      } else {
+        cell.textContent = '—';
+        cell.classList.add('text-gray-400');
+        cell.classList.remove('text-gray-800');
+      }
+    });
+
+    totalGeralEl.textContent = fmt(total);
+    totalItensEl.textContent = itens;
+    submitBtn.disabled = itens === 0;
+  }
+
+  function updateReportLink() {
+    const val = dataInput.value; // YYYY-MM-DD
+    if (!val) return;
+    const [ano, mes] = val.split('-');
+    reportLink.href = `{% url 'relatorio_mensal_xlsx' %}?mes=${parseInt(mes)}&ano=${ano}`;
+  }
+
+  qtyInputs.forEach(input => input.addEventListener('input', recalculate));
+  dataInput.addEventListener('change', updateReportLink);
+
+  recalculate();
+  updateReportLink();
+</script>
+{% endblock %}

@@ -16,4 +16,7 @@ urlpatterns = [
 
     path('api/buscar-cliente/', views.buscar_cliente, name='buscar_cliente'),
     path('api/finalizar-venda/', views.finalizar_venda, name='finalizar_venda'),
+
+    path('vendas/lancamento/', views.lancar_venda_mensal, name='lancamento_mensal'),
+    path('relatorio/mensal.xlsx', views.relatorio_mensal_xlsx, name='relatorio_mensal_xlsx'),
 ]

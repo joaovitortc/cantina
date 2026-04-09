@@ -1,6 +1,7 @@
 import csv
+import io
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -8,7 +9,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, Prefetch, Q, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -519,3 +520,194 @@ def estoque_view(request):
             'movimentacoes': movimentacoes,
         }
     )
+
+
+@login_required
+@admin_required
+def lancar_venda_mensal(request):
+    """Lançamento manual de venda mensal (sem desconto de estoque)."""
+    FORMAS_VALIDAS = {'DIN', 'CAR', 'PIX'}
+
+    if request.method == 'POST':
+        forma = request.POST.get('forma_pagamento', '').strip()
+        data_str = request.POST.get('data', '').strip()
+
+        if forma not in FORMAS_VALIDAS:
+            messages.error(request, 'Forma de pagamento inválida.')
+            return redirect('lancamento_mensal')
+
+        try:
+            data_venda = datetime.strptime(data_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            messages.error(request, 'Data inválida.')
+            return redirect('lancamento_mensal')
+
+        produtos_qs = Produto.objects.filter(ativo=True)
+        itens = []
+        for produto in produtos_qs:
+            qty_str = request.POST.get(f'produto_{produto.id}', '0').strip() or '0'
+            try:
+                qty = int(qty_str)
+            except ValueError:
+                qty = 0
+            if qty > 0:
+                itens.append({'produto': produto, 'quantidade': qty})
+
+        if not itens:
+            messages.error(request, 'Adicione pelo menos um produto com quantidade maior que zero.')
+            return redirect('lancamento_mensal')
+
+        with transaction.atomic():
+            subtotal = sum(
+                Decimal(str(i['produto'].preco)) * i['quantidade']
+                for i in itens
+            )
+            data_hora = timezone.make_aware(
+                datetime(data_venda.year, data_venda.month, data_venda.day, 12, 0, 0)
+            )
+
+            venda = Venda.objects.create(
+                cliente=None,
+                operador=request.user,
+                data_hora=data_hora,
+                subtotal=subtotal,
+                desconto_percentual=Decimal('0'),
+                desconto_valor=Decimal('0'),
+                total=subtotal,
+                forma_pagamento=forma,
+                paga=True,
+                quitada_em=data_hora,
+                observacao='Lançamento mensal manual',
+            )
+
+            for item in itens:
+                preco = Decimal(str(item['produto'].preco))
+                ItemVenda.objects.create(
+                    venda=venda,
+                    produto=item['produto'],
+                    quantidade=item['quantidade'],
+                    preco_unitario=preco,
+                    subtotal=preco * item['quantidade'],
+                )
+
+        messages.success(request, f'Venda #{venda.id} lançada com sucesso! Total: R$ {subtotal:.2f}')
+        return redirect('lancamento_mensal')
+
+    categorias = (
+        Categoria.objects
+        .filter(ativo=True)
+        .prefetch_related(
+            Prefetch('produtos', queryset=Produto.objects.filter(ativo=True).order_by('nome'), to_attr='produtos_ativos')
+        )
+        .order_by('ordem', 'nome')
+    )
+    hoje = timezone.localdate().isoformat()
+
+    return render(request, 'lancamento.html', {
+        'categorias': categorias,
+        'hoje': hoje,
+    })
+
+
+@login_required
+@admin_required
+def relatorio_mensal_xlsx(request):
+    """Exporta relatório mensal de vendas em XLSX."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    now = timezone.now()
+    try:
+        mes = int(request.GET.get('mes', now.month))
+        ano = int(request.GET.get('ano', now.year))
+        if not (1 <= mes <= 12):
+            raise ValueError
+    except (ValueError, TypeError):
+        mes = now.month
+        ano = now.year
+
+    itens = list(
+        ItemVenda.objects
+        .filter(venda__data_hora__year=ano, venda__data_hora__month=mes)
+        .values('produto__id', 'produto__nome')
+        .annotate(
+            qtd_total=Sum('quantidade'),
+            valor_total=Sum('subtotal'),
+        )
+        .order_by('produto__nome')
+    )
+
+    produto_ids = [i['produto__id'] for i in itens]
+    custos = {p.id: p.custo for p in Produto.objects.filter(id__in=produto_ids)}
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"{mes:02d}-{ano}"
+
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    center = Alignment(horizontal='center')
+
+    headers = ['Produto', 'Valor Unitário', 'Custo', 'Qtd', 'Valor Total', 'Custo Total', 'Lucro']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+
+    currency_fmt = 'R$ #,##0.00'
+    total_valor = Decimal('0')
+    total_custo_sum = Decimal('0')
+    total_qtd = 0
+
+    for row_num, item in enumerate(itens, 2):
+        qtd = item['qtd_total'] or 0
+        valor_total = item['valor_total'] or Decimal('0')
+        custo_unit = Decimal(str(custos.get(item['produto__id'], 0) or 0))
+        valor_unit = (valor_total / qtd).quantize(Decimal('0.01')) if qtd else Decimal('0')
+        custo_total = (custo_unit * qtd).quantize(Decimal('0.01'))
+        lucro = (valor_total - custo_total).quantize(Decimal('0.01'))
+
+        ws.cell(row=row_num, column=1, value=item['produto__nome'])
+        ws.cell(row=row_num, column=2, value=float(valor_unit)).number_format = currency_fmt
+        ws.cell(row=row_num, column=3, value=float(custo_unit)).number_format = currency_fmt
+        ws.cell(row=row_num, column=4, value=qtd)
+        ws.cell(row=row_num, column=5, value=float(valor_total)).number_format = currency_fmt
+        ws.cell(row=row_num, column=6, value=float(custo_total)).number_format = currency_fmt
+        ws.cell(row=row_num, column=7, value=float(lucro)).number_format = currency_fmt
+
+        total_valor += valor_total
+        total_custo_sum += custo_total
+        total_qtd += qtd
+
+    total_lucro = total_valor - total_custo_sum
+    total_row = len(itens) + 2
+    total_font = Font(bold=True)
+    total_fill = PatternFill(start_color='E5E7EB', end_color='E5E7EB', fill_type='solid')
+
+    ws.cell(row=total_row, column=1, value='TOTAL').font = total_font
+    ws.cell(row=total_row, column=4, value=total_qtd).font = total_font
+    ws.cell(row=total_row, column=5, value=float(total_valor)).number_format = currency_fmt
+    ws.cell(row=total_row, column=6, value=float(total_custo_sum)).number_format = currency_fmt
+    ws.cell(row=total_row, column=7, value=float(total_lucro)).number_format = currency_fmt
+
+    for col in range(1, 8):
+        cell = ws.cell(row=total_row, column=col)
+        cell.font = total_font
+        cell.fill = total_fill
+
+    col_widths = [30, 16, 12, 8, 16, 14, 14]
+    for col, width in enumerate(col_widths, 1):
+        ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = width
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    filename = f"relatorio_{ano}_{mes:02d}.xlsx"
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
