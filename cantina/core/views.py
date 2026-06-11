@@ -226,6 +226,25 @@ def finalizar_venda(request):
 
 
 @login_required
+def vendas_hoje(request):
+    hoje = timezone.localdate()
+    vendas = (
+        Venda.objects
+        .filter(operador=request.user, data_hora__date=hoje)
+        .prefetch_related('itens__produto')
+        .select_related('cliente')
+        .order_by('-data_hora')
+    )
+    totais = vendas.aggregate(total_dia=Sum('total'), qtd=Count('id'))
+    return render(request, 'vendas_hoje.html', {
+        'vendas': vendas,
+        'total_dia': totais['total_dia'] or 0,
+        'qtd_vendas': totais['qtd'] or 0,
+        'hoje': hoje,
+    })
+
+
+@login_required
 @admin_required
 def produtos_list(request):
     termo = request.GET.get('q', '').strip()

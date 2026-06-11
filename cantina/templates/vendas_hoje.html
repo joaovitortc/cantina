@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Minhas Vendas de Hoje{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+  <header>
+    <h1 class="text-2xl font-bold text-gray-800">Minhas Vendas de Hoje</h1>
+    <p class="text-sm text-gray-500">{{ hoje|date:"d/m/Y" }} — {{ request.user.username }}</p>
+  </header>
+
+  <!-- Totais -->
+  <section class="grid grid-cols-2 gap-4">
+    <div class="bg-white rounded-lg shadow border p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wide">Vendas realizadas</p>
+      <p class="text-3xl font-bold text-gray-800 mt-1">{{ qtd_vendas }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow border p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-wide">Total do dia</p>
+      <p class="text-3xl font-bold text-green-700 mt-1">R$ {{ total_dia|floatformat:2 }}</p>
+    </div>
+  </section>
+
+  <!-- Lista de vendas -->
+  {% if vendas %}
+  <section class="space-y-3">
+    {% for venda in vendas %}
+    <div class="bg-white rounded-lg shadow border p-4 space-y-2">
+
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-gray-700">#{{ venda.id }}</span>
+          <span class="text-sm text-gray-500">{{ venda.data_hora|date:"H:i" }}</span>
+          {% if venda.cliente %}
+          <span class="text-sm text-gray-700">— {{ venda.cliente.nome }}</span>
+          {% endif %}
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs px-2 py-1 rounded-full font-medium
+            {% if venda.forma_pagamento == 'DIN' %}bg-green-100 text-green-800
+            {% elif venda.forma_pagamento == 'PIX' %}bg-blue-100 text-blue-800
+            {% elif venda.forma_pagamento == 'CAR' %}bg-purple-100 text-purple-800
+            {% else %}bg-red-100 text-red-800{% endif %}">
+            {{ venda.get_forma_pagamento_display }}
+          </span>
+          <span class="text-base font-bold text-gray-800">R$ {{ venda.total|floatformat:2 }}</span>
+        </div>
+      </div>
+
+      <ul class="text-sm text-gray-600 space-y-0.5 pl-1">
+        {% for item in venda.itens.all %}
+        <li>{{ item.quantidade }}x {{ item.produto.nome }}
+          <span class="text-gray-400">R$ {{ item.preco_unitario|floatformat:2 }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+
+      {% if venda.desconto_percentual %}
+      <p class="text-xs text-gray-400">Desconto: {{ venda.desconto_percentual }}% (R$ {{ venda.desconto_valor|floatformat:2 }})</p>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+  </section>
+
+  {% else %}
+  <div class="bg-white rounded-lg shadow border p-8 text-center text-gray-400">
+    Nenhuma venda registrada hoje ainda.
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

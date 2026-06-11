@@ -21,6 +21,13 @@
       🧾 POS
     </a>
 
+    <a
+      href="{% url 'vendas_hoje' %}"
+      class="block px-3 py-2 rounded hover:bg-gray-800 transition"
+    >
+      📋 Vendas de Hoje
+    </a>
+
     {% if request.user.is_superuser %}
     <div class="border-t border-gray-700 my-3"></div>
 

@@ -1,13 +1,16 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from . import views
 
 urlpatterns = [
     path('', views.login_view, name='login'),
+    path('login/', RedirectView.as_view(pattern_name='login', permanent=True)),
     path('logout/', views.logout_view, name='logout'),
     path('pos/', views.pos_view, name='pos'),
     path('produtos/', views.produtos_list, name='produtos_list'),
     path('vendas/', views.vendas_dashboard, name='vendas'),
+    path('vendas/hoje/', views.vendas_hoje, name='vendas_hoje'),
     path('vendas/export.csv', views.exportar_vendas_csv, name='exportar_vendas_csv'),
     path('vendas/export-clientes.csv', views.exportar_vendas_clientes_csv, name='exportar_vendas_clientes_csv'),
     path('vendas/<int:venda_id>/quitar/', views.quitar_venda, name='quitar_venda'),
